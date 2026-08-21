@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =========================
+// ENUMS
+// =========================
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// =========================
+// USER
+// =========================
+
+model User {
+  id Int @id @default(autoincrement())
+
+  phoneNumber   String  @unique
+  phoneVerified Boolean @default(false)
+
+  firstName String
+  lastName  String
+
+  address   String? @db.Text
+  ipAddress String?
+
+  role Role @default(CUSTOMER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions  Session[]
+  cart      Cart?
+  favorites Favorite[]
+  orders    Order[]
+}
+
+// ==========================
+// OTP VERIFICATION
+// ==========================
+
+model OtpVerification {
+  id          Int       @id @default(autoincrement())
+  phoneNumber String
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  verifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([phoneNumber])
+  @@index([expiresAt])
+}
+
+// =========================
+// SESSION
+// =========================
+
+model Session {
+  id        String   @id
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// =========================
+// SHOPPING CART
+// =========================
+
+model Cart {
+  id     Int @id @default(autoincrement())
+  userId Int @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  items CartItem[]
+}
+
+// =========================
+// SHOPPING CART ITEMS
+// =========================
+
+model CartItem {
+  id Int @id @default(autoincrement())
+
+  cartId    Int
+  productId Int
+
+  quantity Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+  @@index([productId])
+}
+
+// =========================
+// FAVORITES
+// =========================
+
+model Favorite {
+  id Int @id @default(autoincrement())
+
+  userId    Int
+  productId Int
+
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+// =========================
+// CATEGORY
+// =========================
+
+model Category {
+  id Int @id @default(autoincrement())
+
+  name        String  @unique
+  slug        String  @unique
+  description String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+// =========================
+// PRODUCT
+// =========================
+
+model Product {
+  id Int @id @default(autoincrement())
+
+  title String
+  slug  String @unique
+
+  price Decimal  @db.Decimal(12, 2)
+  offer Decimal? @db.Decimal(12, 2)
+
+  images String[]
+
+  description String @db.Text
+
+  count Int @default(0)
+
+  purchaseCount Int @default(0)
+
+  isFeatured Boolean @default(false)
+  isActive   Boolean @default(true)
+
+  categoryId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  cartItems  CartItem[]
+  favorites  Favorite[]
+  orderItems OrderItem[]
+
+  @@index([categoryId])
+  @@index([title])
+  @@index([isFeatured])
+  @@index([isActive])
+  @@index([purchaseCount])
+}
+
+// =========================
+// ORDERS
+// =========================
+
+model Order {
+  id Int @id @default(autoincrement())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  firstName String
+  lastName  String
+  phone     String
+  address   String
+
+  totalPrice Float
+
+  status        OrderStatus   @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+
+  items    OrderItem[]
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =========================
+// ORDER ITEMS
+// =========================
+
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  productTitle String
+  productPrice Decimal
+
+  quantity Int
+
+  totalPrice Decimal
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// =========================
+// PAYMENTS
+// =========================
+
+model Payment {
+  id Int @id @default(autoincrement())
+
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  amount        Decimal @db.Decimal(12, 2)
+  authority     String  @unique
+  transactionId String?
+
+  status PaymentStatus @default(PENDING)
+
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+}
