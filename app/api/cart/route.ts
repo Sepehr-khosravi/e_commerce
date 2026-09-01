@@ -16,11 +16,9 @@ export async function GET() {
       return response;
     }
 
-    const cart = await getUserCart(user!.id);
+    const cart = await getUserCart(user.id);
 
-    return NextResponse.json({
-      cart,
-    });
+    return NextResponse.json({ cart });
   } catch (error) {
     console.error("GET /api/cart:", error);
 
@@ -28,16 +26,12 @@ export async function GET() {
       {
         error: "Failed to get cart",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
 
-export async function POST(
-  request: NextRequest
-) {
+export async function POST(request: NextRequest) {
   try {
     const { user, response } = await requireUser();
 
@@ -45,10 +39,45 @@ export async function POST(
       return response;
     }
 
-    const body = await request.json();
+    let body: unknown;
 
-    const productId = Number(body.productId);
-    const quantity = Number(body.quantity ?? 1);
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Invalid JSON body",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("productId" in body)
+    ) {
+      return NextResponse.json(
+        {
+          error: "productId is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const rawProductId = (
+      body as { productId?: unknown }
+    ).productId;
+
+    const rawQuantity = (
+      body as { quantity?: unknown }
+    ).quantity;
+
+    const productId = Number(rawProductId);
+    const quantity =
+      rawQuantity === undefined
+        ? 1
+        : Number(rawQuantity);
 
     if (
       !Number.isInteger(productId) ||
@@ -58,9 +87,7 @@ export async function POST(
         {
           error: "Invalid productId",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -72,25 +99,19 @@ export async function POST(
         {
           error: "Invalid quantity",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     const item = await addProductToCart(
-      user!.id,
+      user.id,
       productId,
       quantity
     );
 
     return NextResponse.json(
-      {
-        item,
-      },
-      {
-        status: 201,
-      }
+      { item },
+      { status: 201 }
     );
   } catch (error) {
     console.error("POST /api/cart:", error);
@@ -101,12 +122,8 @@ export async function POST(
         : "Failed to add product to cart";
 
     return NextResponse.json(
-      {
-        error: message,
-      },
-      {
-        status: 400,
-      }
+      { error: message },
+      { status: 400 }
     );
   }
 }
@@ -119,7 +136,7 @@ export async function DELETE() {
       return response;
     }
 
-    await clearCart(user!.id);
+    await clearCart(user.id);
 
     return NextResponse.json({
       message: "Cart cleared successfully",
@@ -131,9 +148,7 @@ export async function DELETE() {
       {
         error: "Failed to clear cart",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

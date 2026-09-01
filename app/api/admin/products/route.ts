@@ -1,10 +1,59 @@
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
 import { requireAdmin } from "@/app/lib/auth/authorization";
 
 import {
   createNewProduct,
+  getAdminProducts,
+  searchProducts,
 } from "@/app/lib/products/product.service";
+
+
+// ======================================================
+// GET - Admin Products
+// ======================================================
+export async function GET(
+  _request: NextRequest
+) {
+  try {
+    const { response } = await requireAdmin();
+
+    if (response) {
+      return response;
+    }
+
+    const products = await getAdminProducts();
+
+    return NextResponse.json({
+      products,
+    });
+  } catch (error) {
+    console.error(
+      "GET /api/admin/products:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get products",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
+
+
+// ======================================================
+// POST - Create Product
+// ======================================================
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +67,7 @@ export async function POST(request: NextRequest) {
 
     const price = Number(body.price);
     const categoryId = Number(body.categoryId);
+
     const count =
       body.count === undefined
         ? 0
@@ -120,10 +170,12 @@ export async function POST(request: NextRequest) {
       description,
       categoryId,
       count,
+
       isFeatured:
         typeof body.isFeatured === "boolean"
           ? body.isFeatured
           : false,
+
       isActive:
         typeof body.isActive === "boolean"
           ? body.isActive

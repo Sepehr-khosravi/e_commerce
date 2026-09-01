@@ -42,7 +42,11 @@ export async function createUserCart(
     include: {
       items: {
         include: {
-          product: true,
+          product: {
+            include: {
+              category: true,
+            },
+          },
         },
       },
     },

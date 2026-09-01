@@ -6,6 +6,18 @@ import type {
   UpdateProductData,
 } from "./product.types";
 
+export async function findAdminProducts() {
+  return prisma.product.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+
+    include: {
+      category: true,
+    },
+  });
+}
+
 export async function findProductById(id: number) {
   return prisma.product.findUnique({
     where: {

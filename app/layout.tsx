@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
-
+import { AuthProvider } from "@/contexts/AuthContext";
+import Footer from "@/components/footer/Footer";
+import Navbar from "@/components/navbar/Navbar";
 
 export const metadata: Metadata = {
-  title: "ElectroMart - Search Products",
+  title: "ElectroMart",
   description: "Your one-stop shop for all electronics and gadgets",
 };
 
@@ -13,8 +15,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="fa" dir="rtl">
+      <body>
+        <AuthProvider>
+        <Navbar />
+          {children}
+        <Footer />
+        </AuthProvider>
+      </body>
     </html>
   );
 }

@@ -1,6 +1,7 @@
 import {
   createProduct,
   deleteProduct,
+  findAdminProducts,
   findFeaturedProducts,
   findNewestProducts,
   findPopularProducts,
@@ -49,6 +50,13 @@ export async function getProductBySlug(
 
   return product;
 }
+
+
+export async function getAdminProducts() {
+  return findAdminProducts();
+}
+
+
 
 export async function searchProducts(
   options: SearchProductsOptions
@@ -132,11 +140,11 @@ export async function createNewProduct(
     );
   }
 
-  if (data.images.length === 0) {
-    throw new Error(
-      "At least one product image is required"
-    );
-  }
+  // if (data.images.length === 0) {
+  //   throw new Error(
+  //     "At least one product image is required" //for development environment we have to ignore these lines of code. 
+  //   );
+  // }
 
   if (data.count !== undefined && data.count < 0) {
     throw new Error(

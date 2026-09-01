@@ -106,7 +106,9 @@ export async function checkout(
         productTitle: product.title,
         productPrice: Number(unitPrice),
         quantity: item.quantity,
-        subtotal,
+
+        // OrderItem uses "totalPrice", not "subtotal"
+        totalPrice: subtotal,
       });
     }
 

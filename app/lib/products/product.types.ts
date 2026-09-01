@@ -7,18 +7,22 @@ export type ProductSort =
   | "price_desc"
   | "popular";
 
-export interface SearchProductsOptions {
+export type SearchProductsOptions = {
   query?: string;
   categoryId?: number;
-
   minPrice?: number;
   maxPrice?: number;
-
-  sort?: ProductSort;
-
+  sort?:
+    | "newest"
+    | "oldest"
+    | "price_asc"
+    | "price_desc"
+    | "popular";
   cursor?: number;
   limit?: number;
-}
+
+  includeInactive?: boolean;
+};
 
 export interface ProductPagination {
   products: Prisma.ProductGetPayload<{
