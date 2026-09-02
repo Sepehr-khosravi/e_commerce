@@ -5,9 +5,7 @@ import type {
   UpdateCartItemData,
 } from "./cart.types";
 
-export async function findUserCart(
-  userId: number
-) {
+export async function findUserCart(userId: number) {
   return prisma.cart.findUnique({
     where: {
       userId,
@@ -15,6 +13,12 @@ export async function findUserCart(
 
     include: {
       items: {
+        where: {
+          product: {
+            isActive: true,
+          },
+        },
+
         orderBy: {
           id: "asc",
         },

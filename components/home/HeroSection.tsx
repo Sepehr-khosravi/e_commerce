@@ -1,6 +1,40 @@
+function Circle() {
+  return (
+      // <div 
+      //   className="
+      //     absolute 
+      //     w-80 
+      //     h-80 
+      //     top-3/6 
+      //     left-3/6 
+      //     -translate-x-3/6 
+      //     -translate-y-3/6 
+      //     -z-10
+      //     rounded-full
+      //     bg-gradient-to-br
+      //     from-blue-500
+      //     via-purple-500
+      //     to-pink-500
+      //     blur-2xl
+      //     opacity-70
+      //     animate-pulse
+      //     hover:scale-110
+      //     hover:opacity-90
+      //     transition-all
+      //     duration-700
+      //     ease-in-out
+      //     shadow-2xl
+      //     shadow-blue-500/20
+      //   "
+      // />  
+      <></>
+  );
+}
+
 export default function HeroSection() {
   return (
     <section className="relative overflow-hidden">
+      <Circle/>
       <div className="mx-auto flex min-h-[560] max-w-7xl items-center justify-center px-5 py-20 text-center sm:px-6 lg:px-8">
 
         <div className="flex max-w-3xl flex-col items-center">

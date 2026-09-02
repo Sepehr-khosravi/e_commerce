@@ -133,8 +133,8 @@ export default function SearchBar({
           ease-out
 
           ${
-            isOpen
-              ? "w-[min(11rem,calc(100vw-5.5rem))]"
+            !isOpen
+              ? `w-[min(${mobile ? "7" : "10"}rem,calc(100vw-5.5rem))]`
               : "w-9"
           }
         `}
@@ -202,7 +202,7 @@ export default function SearchBar({
             focus:ring-0
 
             ${
-              isOpen
+              !isOpen
                 ? "opacity-100"
                 : "pointer-events-none opacity-0"
             }

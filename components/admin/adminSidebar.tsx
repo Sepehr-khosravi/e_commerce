@@ -26,11 +26,11 @@ const menuItems = [
     href: "/private/products",
     icon: Package,
   },
-  {
-    title: "دسته‌بندی‌ها",
-    href: "/private/categories",
-    icon: Tags,
-  },
+  // {
+  //   title: "دسته‌بندی‌ها",
+  //   href: "/private/categories",
+  //   icon: Tags,
+  // },
   {
     title: "سفارشات",
     href: "/private/orders",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -39,12 +39,45 @@ function formatPrice(value: number | string) {
   );
 }
 
-function getDiscount(price: number, offer: number) {
-  if (offer >= price) return 0;
+/*
+ * offer = درصد تخفیف
+ *
+ * مثال:
+ * price = 1,000,000
+ * offer = 20
+ *
+ * discountAmount = 200,000
+ * finalPrice = 800,000
+ */
+function getFinalPrice(
+  price: number,
+  offer: number | null
+) {
+  if (
+    offer === null ||
+    offer <= 0 ||
+    offer >= 100
+  ) {
+    return price;
+  }
 
   return Math.round(
-    ((price - offer) / price) * 100
+    price - (price * offer) / 100
   );
+}
+
+function getDiscountPercent(
+  offer: number | null
+) {
+  if (
+    offer === null ||
+    offer <= 0 ||
+    offer >= 100
+  ) {
+    return 0;
+  }
+
+  return Math.round(offer);
 }
 
 export default function ProductPage({
@@ -67,7 +100,9 @@ export default function ProductPage({
         const { id } = await params;
 
         if (!/^\d+$/.test(id)) {
-          setError("شناسه محصول نامعتبر است.");
+          setError(
+            "شناسه محصول نامعتبر است."
+          );
           return;
         }
 
@@ -82,7 +117,8 @@ export default function ProductPage({
 
         if (!response.ok) {
           throw new Error(
-            data.error || "خطا در دریافت محصول"
+            data.error ||
+              "خطا در دریافت محصول"
           );
         }
 
@@ -119,7 +155,6 @@ export default function ProductPage({
         className="flex min-h-screen items-center justify-center bg-white px-5"
       >
         <div className="text-center">
-
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100">
             <Package
               size={24}
@@ -138,7 +173,6 @@ export default function ProductPage({
             بازگشت به محصولات
             <ArrowRight size={15} />
           </Link>
-
         </div>
       </main>
     );
@@ -146,17 +180,32 @@ export default function ProductPage({
 
   const price = Number(product.price);
 
+  /*
+   * offer درصد تخفیف است.
+   *
+   * مثال:
+   * price = 1,000,000
+   * offer = 20
+   *
+   * finalPrice = 800,000
+   */
   const offer =
     product.offer !== null
       ? Number(product.offer)
       : null;
 
   const hasOffer =
-    offer !== null && offer < price;
+    offer !== null &&
+    offer > 0 &&
+    offer < 100;
 
-  const discount = hasOffer
-    ? getDiscount(price, offer!)
-    : 0;
+  const finalPrice = getFinalPrice(
+    price,
+    offer
+  );
+
+  const discount =
+    getDiscountPercent(offer);
 
   const available = product.count > 0;
 
@@ -169,7 +218,6 @@ export default function ProductPage({
 
         {/* Breadcrumb */}
         <div className="mb-8 flex items-center gap-2 text-xs text-neutral-400">
-
           <Link
             href="/"
             className="transition hover:text-black"
@@ -191,36 +239,17 @@ export default function ProductPage({
           <span className="max-w-48 truncate text-neutral-600">
             {product.title}
           </span>
-
         </div>
 
         {/* Main Product */}
         <section className="grid gap-8 lg:grid-cols-2 lg:gap-14">
 
-          {/* Image */}
-          <div>
-            <div className="relative aspect-square overflow-hidden rounded-[28px] bg-neutral-50">
-
-              {product.images.length > 0 ? (
-                <img
-                  src={product.images[0]}
-                  alt={product.title}
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <div className="h-40 w-40 animate-pulse rounded-[28px] bg-neutral-200 sm:h-56 sm:w-56" />
-                </div>
-              )}
-
-              {product.isFeatured && (
-                <span className="absolute right-5 top-5 rounded-full bg-black px-3 py-1.5 text-[10px] font-bold text-white">
-                  محصول منتخب
-                </span>
-              )}
-
-            </div>
-          </div>
+          {/* Images */}
+          <ProductImageGallery
+            images={product.images}
+            title={product.title}
+            isFeatured={product.isFeatured}
+          />
 
           {/* Information */}
           <div className="flex flex-col justify-center">
@@ -239,21 +268,24 @@ export default function ProductPage({
               {hasOffer ? (
                 <div className="flex flex-wrap items-center gap-3">
 
+                  {/* Final Price */}
                   <span className="text-3xl font-bold text-black">
-                    {formatPrice(offer!)}
+                    {formatPrice(finalPrice)}
+
                     <span className="mr-1 text-sm font-medium text-neutral-400">
                       تومان
                     </span>
                   </span>
 
+                  {/* Original Price */}
                   <span className="text-sm text-neutral-400 line-through">
                     {formatPrice(price)}
                   </span>
 
+                  {/* Discount */}
                   <span className="rounded-full bg-black px-2.5 py-1 text-[10px] font-bold text-white">
                     {discount}٪ تخفیف
                   </span>
-
                 </div>
               ) : (
                 <span className="text-3xl font-bold text-black">
@@ -271,7 +303,6 @@ export default function ProductPage({
             <div className="mt-5 flex flex-wrap gap-3">
 
               <div className="flex items-center gap-2 rounded-xl bg-neutral-50 px-4 py-3">
-
                 <span
                   className={`h-2 w-2 rounded-full ${
                     available
@@ -287,11 +318,9 @@ export default function ProductPage({
                       )} عدد`
                     : "ناموجود"}
                 </span>
-
               </div>
 
               <div className="flex items-center gap-2 rounded-xl bg-neutral-50 px-4 py-3">
-
                 <Truck
                   size={14}
                   className="text-neutral-400"
@@ -300,7 +329,6 @@ export default function ProductPage({
                 <span className="text-xs font-semibold text-neutral-600">
                   ارسال سریع
                 </span>
-
               </div>
 
             </div>
@@ -331,7 +359,6 @@ export default function ProductPage({
             </div>
 
           </div>
-
         </section>
 
         {/* Description */}
@@ -351,10 +378,7 @@ export default function ProductPage({
 
         </section>
 
-        {/* ================================================= */}
-        {/* RELATED PRODUCTS                                  */}
-        {/* ================================================= */}
-
+        {/* Related Products */}
         <RelatedProducts
           categoryId={product.categoryId}
           currentProductId={product.id}
@@ -362,6 +386,306 @@ export default function ProductPage({
 
       </div>
     </main>
+  );
+}
+
+/*
+ * ============================================================
+ * PRODUCT GALLERY
+ * ============================================================
+ *
+ * قابلیت‌ها:
+ *
+ * Desktop:
+ * - Drag با موس
+ * - حرکت نرم
+ *
+ * Mobile:
+ * - Swipe با انگشت
+ * - Touch support
+ *
+ * همچنین:
+ * - Thumbnail پایین عکس
+ * - دکمه‌های قبلی/بعدی
+ * - تصویر فعال مشخص است
+ * - اگر فقط یک عکس باشد thumbnail نمایش داده نمی‌شود
+ */
+function ProductImageGallery({
+  images,
+  title,
+  isFeatured,
+}: {
+  images: string[];
+  title: string;
+  isFeatured: boolean;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const startX = useRef(0);
+  const currentX = useRef(0);
+  const dragDistance = useRef(0);
+
+  const hasImages = images.length > 0;
+  const imageCount = images.length;
+
+  // اگر images از API تغییر کرد
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [images]);
+
+  function goTo(index: number) {
+    if (!imageCount) return;
+
+    // حلقه‌ای؛ بعد از آخر دوباره اول
+    const nextIndex =
+      (index + imageCount) % imageCount;
+
+    setCurrentIndex(nextIndex);
+  }
+
+  function nextImage() {
+    goTo(currentIndex + 1);
+  }
+
+  function previousImage() {
+    goTo(currentIndex - 1);
+  }
+
+  function handlePointerDown(
+    event: React.PointerEvent<HTMLDivElement>
+  ) {
+    if (!hasImages || imageCount <= 1) return;
+
+    startX.current = event.clientX;
+    currentX.current = event.clientX;
+    dragDistance.current = 0;
+
+    setIsDragging(true);
+
+    event.currentTarget.setPointerCapture(
+      event.pointerId
+    );
+  }
+
+  function handlePointerMove(
+    event: React.PointerEvent<HTMLDivElement>
+  ) {
+    if (!isDragging) return;
+
+    currentX.current = event.clientX;
+
+    dragDistance.current =
+      currentX.current - startX.current;
+  }
+
+  function handlePointerUp() {
+    if (!isDragging) return;
+
+    setIsDragging(false);
+
+    const distance = dragDistance.current;
+
+    // حداقل مقدار لازم برای swipe
+    const threshold = 50;
+
+    if (Math.abs(distance) >= threshold) {
+      if (distance < 0) {
+        // کشیدن به چپ → عکس بعدی
+        nextImage();
+      } else {
+        // کشیدن به راست → عکس قبلی
+        previousImage();
+      }
+    }
+
+    dragDistance.current = 0;
+  }
+
+  function handlePointerCancel() {
+    setIsDragging(false);
+    dragDistance.current = 0;
+  }
+
+  if (!hasImages) {
+    return (
+      <div className="relative aspect-square overflow-hidden rounded-[28px] bg-neutral-50">
+        <div className="flex h-full items-center justify-center">
+          <div className="h-40 w-40 animate-pulse rounded-[28px] bg-neutral-200 sm:h-56 sm:w-56" />
+        </div>
+
+        {isFeatured && (
+          <span className="absolute right-5 top-5 rounded-full bg-black px-3 py-1.5 text-[10px] font-bold text-white">
+            محصول منتخب
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Main Image */}
+      <div
+        className={`
+          relative aspect-square
+          overflow-hidden
+          rounded-[28px]
+          bg-neutral-50
+          select-none
+          touch-pan-y
+          ${isDragging ? "cursor-grabbing" : "cursor-grab"}
+        `}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+      >
+        <img
+          key={`${currentIndex}-${images[currentIndex]}`}
+          src={images[currentIndex]}
+          alt={`${title} - تصویر ${currentIndex + 1}`}
+          draggable={false}
+          className={`
+            h-full w-full
+            object-contain
+            pointer-events-none
+            ${
+              isDragging
+                ? ""
+                : "animate-gallery-fade"
+            }
+          `}
+        />
+
+        {isFeatured && (
+          <span className="absolute right-5 top-5 rounded-full bg-black px-3 py-1.5 text-[10px] font-bold text-white">
+            محصول منتخب
+          </span>
+        )}
+
+        {/* Left arrow */}
+        {imageCount > 1 && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              previousImage();
+            }}
+            aria-label="تصویر قبلی"
+            className="
+              absolute
+              left-4 top-1/2
+              flex h-10 w-10
+              -translate-y-1/2
+              items-center justify-center
+              rounded-full
+              bg-white/90
+              text-black
+              shadow-sm
+              backdrop-blur
+              transition
+              hover:bg-white
+              active:scale-95
+            "
+          >
+            <ChevronLeft
+              size={18}
+            />
+          </button>
+        )}
+
+        {/* Right arrow */}
+        {imageCount > 1 && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              nextImage();
+            }}
+            aria-label="تصویر بعدی"
+            className="
+              absolute
+              right-4 top-1/2
+              flex h-10 w-10
+              -translate-y-1/2
+              -translate-y-1/2
+              rotate-180
+              items-center justify-center
+              rounded-full
+              bg-white/90
+              text-black
+              shadow-sm
+              backdrop-blur
+              transition
+              hover:bg-white
+              active:scale-95
+            "
+          >
+            <ChevronLeft
+              size={18}
+            />
+          </button>
+        )}
+      </div>
+
+      {/* Thumbnails */}
+      {imageCount > 1 && (
+        <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+          {images.map((image, index) => (
+            <button
+              key={`${image}-${index}`}
+              type="button"
+              onClick={() => goTo(index)}
+              className={`
+                relative
+                h-20 w-20
+                shrink-0
+                overflow-hidden
+                rounded-xl
+                bg-neutral-50
+                transition
+                ${
+                  index === currentIndex
+                    ? "ring-2 ring-black ring-offset-2"
+                    : "opacity-60 hover:opacity-100"
+                }
+              `}
+            >
+              <img
+                src={image}
+                alt={`${title} - تصویر ${index + 1}`}
+                draggable={false}
+                className="h-full w-full object-contain"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Dots */}
+      {imageCount > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-1.5">
+          {images.map((_, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => goTo(index)}
+              aria-label={`رفتن به تصویر ${index + 1}`}
+              className={`
+                h-1.5 rounded-full
+                transition-all duration-300
+                ${
+                  index === currentIndex
+                    ? "w-6 bg-black"
+                    : "w-1.5 bg-neutral-300"
+                }
+              `}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -376,7 +700,6 @@ function InfoCard({
 }) {
   return (
     <div className="rounded-2xl border border-neutral-100 p-4">
-
       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-black">
         {icon}
       </div>
@@ -388,7 +711,6 @@ function InfoCard({
       <p className="mt-1 text-[10px] text-neutral-400">
         {description}
       </p>
-
     </div>
   );
 }
@@ -428,9 +750,7 @@ function ProductPageSkeleton() {
             <div className="mt-7 h-14 animate-pulse rounded-2xl bg-neutral-100" />
 
           </div>
-
         </div>
-
       </div>
     </main>
   );

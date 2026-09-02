@@ -69,6 +69,9 @@ export default function VerifyPageContent() {
 
       router.replace("/");
       router.refresh();
+      setTimeout(()=>{
+          window.location.reload();
+      }, 1000);
     } catch (error) {
       setError(
         error instanceof Error
@@ -108,7 +111,7 @@ export default function VerifyPageContent() {
             autoComplete="one-time-code"
             dir="ltr"
             maxLength={6}
-            placeholder="123456"
+            placeholder="X.X.X.X.X.X"
             value={code}
             onChange={(e) =>
               setCode(
@@ -128,7 +131,7 @@ export default function VerifyPageContent() {
 
         <button
           type="submit"
-          disabled={loading || code.length !== 6}
+          disabled={(loading || (code.length !== 6) ? true : false)}
           className="h-12 w-full rounded-xl bg-black text-sm font-semibold text-white transition-all duration-300 hover:bg-neutral-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading

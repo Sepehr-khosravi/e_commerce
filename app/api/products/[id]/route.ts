@@ -34,6 +34,17 @@ export async function GET(
     const product =
       await getProductById(productId);
 
+    if (!product.isActive){
+      return NextResponse.json(
+        {
+          error: "Product not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
     return NextResponse.json({
       product,
     });

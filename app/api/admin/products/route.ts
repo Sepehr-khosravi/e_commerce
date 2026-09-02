@@ -73,12 +73,25 @@ export async function POST(request: NextRequest) {
         ? 0
         : Number(body.count);
 
-    const offer =
+    const offer: number =
       body.offer === undefined ||
       body.offer === null ||
       body.offer === ""
-        ? null
+        ? 0
         : Number(body.offer);
+    
+    if (
+      !Number.isFinite(offer) ||
+      offer < 0 ||
+      offer > 100
+    ) {
+      return NextResponse.json(
+        {
+          error: "Offer must be between 0 and 100",
+        },
+        { status: 400 }
+      );
+    }
 
     if (
       typeof body.title !== "string" ||
@@ -137,17 +150,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (
-      offer !== null &&
-      (!Number.isFinite(offer) || offer < 0)
-    ) {
-      return NextResponse.json(
-        {
-          error: "Invalid offer",
-        },
-        { status: 400 }
-      );
-    }
+    // if (
+    //   offer !== null &&
+    //   (!Number.isFinite(offer) || offer < 0)
+    // ) {
+    //   return NextResponse.json(
+    //     {
+    //       error: "Invalid offer",
+    //     },
+    //     { status: 400 }
+    //   );
+    // }
 
     const images = Array.isArray(body.images)
       ? body.images.filter(

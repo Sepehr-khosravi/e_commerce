@@ -39,3 +39,6 @@ next-env.d.ts
 /.claude/
 /.agents/
 /.windsurf/
+
+/uploads
+/uploads/products

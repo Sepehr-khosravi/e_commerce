@@ -5,6 +5,7 @@ type FooterLinkGroupProps = {
   links: {
     label: string;
     href: string;
+    id : number;
   }[];
 };
 
@@ -20,7 +21,7 @@ export default function FooterLinks({
 
       <ul className="mt-5 space-y-3">
         {links.map((link) => (
-          <li key={link.href}>
+          <li key={link.id}>
             <Link
               href={link.href}
               className="

@@ -8,7 +8,7 @@ type SearchBarProps = {
 export const SearchBarWrapper = (  {mobile = false} : SearchBarProps)=>{
     return (
         <Suspense fallback={null}>
-            <SearchBar mobile></SearchBar>
+            <SearchBar mobile={mobile}></SearchBar>
         </Suspense>
     )
 }

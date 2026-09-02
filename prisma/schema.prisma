@@ -168,15 +168,15 @@ model Category {
 // =========================
 // PRODUCT
 // =========================
-
 model Product {
   id Int @id @default(autoincrement())
 
   title String
   slug  String @unique
 
-  price Decimal  @db.Decimal(12, 2)
-  offer Decimal? @db.Decimal(12, 2)
+  price Decimal @db.Decimal(12, 2)
+
+  offer Decimal? @db.Decimal(5, 2)
 
   images String[]
 

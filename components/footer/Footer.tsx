@@ -6,14 +6,17 @@ const shopLinks = [
   {
     label: "محصولات",
     href: "/products",
+    id : 1
   },
   {
     label: "دسته‌بندی‌ها",
     href: "/products",
+    id : 2,
   },
   {
     label: "محصولات جدید",
     href: "/products?sort=newest",
+    id : 3,
   },
 ];
 
@@ -21,14 +24,17 @@ const accountLinks = [
   {
     label: "حساب کاربری",
     href: "/dashboard",
+    id : 4,
   },
   {
     label: "سفارش‌های من",
     href: "/dashboard/orders",
+    id : 5,
   },
   {
     label: "سبد خرید",
     href: "/cart",
+    id : 6
   },
 ];
 
@@ -36,10 +42,12 @@ const companyLinks = [
   {
     label: "درباره ما",
     href: "/about",
+    id : 7,
   },
   {
     label: "تماس با ما",
     href: "/contact",
+    id : 8,
   },
 ];
 
