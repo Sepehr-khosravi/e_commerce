@@ -132,7 +132,7 @@ export default function ProductSection() {
       className="mx-auto max-w-7xl px-5 py-16 sm:px-6 lg:px-8"
     >
       {/* Header */}
-      <div className="mb-10 flex items-end justify-between gap-4">
+      {/* <div className="mb-10 flex items-end justify-between gap-4">
         <div>
           <span className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
             Featured
@@ -153,7 +153,7 @@ export default function ProductSection() {
         >
           مشاهده همه ←
         </a>
-      </div>
+      </div> */}
 
       {/* Initial Skeleton */}
       {initialLoading ? (
