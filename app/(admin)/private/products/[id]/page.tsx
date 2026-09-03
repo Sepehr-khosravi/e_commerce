@@ -932,7 +932,7 @@ export default function EditProductPage({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Link
-              href="/admin/products"
+              href="/private/products"
               className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-400 transition hover:text-black"
             >
               <ArrowRight size={14} />

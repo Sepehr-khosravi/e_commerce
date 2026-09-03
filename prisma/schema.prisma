@@ -283,3 +283,11 @@ model Payment {
   @@index([orderId])
   @@index([status])
 }
+
+
+model Banner {
+  id        Int      @id @default(autoincrement())
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -13,6 +13,7 @@ import {
   Tags,
   Users,
   X,
+  GalleryThumbnails
 } from "lucide-react";
 
 const menuItems = [
@@ -46,6 +47,11 @@ const menuItems = [
     href: "/private/inventory",
     icon: Boxes,
   },
+  {
+    title : "مدیریت بنرها",
+    href : "/private/banners",
+    icon : GalleryThumbnails
+  }
 ];
 
 type AdminSidebarProps = {

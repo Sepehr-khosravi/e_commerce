@@ -948,7 +948,7 @@ function ProductMobileCard({
 
           <div className="mt-4 flex gap-2">
             <Link
-              href={`/admin/products/${product.id}`}
+              href={`/private/products/${product.id}`}
               className="flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-black text-xs font-semibold text-white"
             >
               <Edit3 size={14} />

@@ -30,3 +30,9 @@ body {
 
   font-weight: 500;
 }
+
+@keyframes banner-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
