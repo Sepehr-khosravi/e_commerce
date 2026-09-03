@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import Image from "next/image";
 
 type Banner = {
   id: number;
@@ -458,6 +459,7 @@ export default function HeroSection() {
                     object-cover
                     object-center
                   "
+                  loading="lazy"
                 />
 
                 {/* Subtle overlay */}
