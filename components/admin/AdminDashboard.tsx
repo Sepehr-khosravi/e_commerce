@@ -16,8 +16,9 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AdminSidebar } from "./adminSidebar";
+import Loading from "@/app/loading";
 
-type DashboardData = {
+export type DashboardData = {
   totalRevenue: number;
   todayRevenue: number;
   totalOrders: number;
@@ -87,7 +88,10 @@ export default function AdminDashboard() {
 
         setError(true);
       } finally {
-        setLoading(false);
+        setTimeout(()=>{
+          setLoading(false);
+        }, 2000);
+        
       }
     }
 
@@ -95,7 +99,9 @@ export default function AdminDashboard() {
   }, []);
 
   return (
-    <main
+    loading ? <Loading /> 
+    : (
+          <main
       dir="rtl"
       className="min-h-screen bg-neutral-50"
     >
@@ -157,6 +163,7 @@ export default function AdminDashboard() {
 
       </div>
     </main>
+    )
   );
 }
 
