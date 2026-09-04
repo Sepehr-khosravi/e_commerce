@@ -15,4 +15,4 @@ export function isValidImageFilename(
     imageFilenameRegex.test(value) ||
     imageUrlRegex.test(value)
   );
-}
+};

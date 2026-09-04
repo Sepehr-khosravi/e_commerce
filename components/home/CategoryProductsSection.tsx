@@ -313,4 +313,4 @@ function CategoryProductCard({ product }: { product: Product }) {
       </article>
     </Link>
   );
-}
+};
