@@ -5,7 +5,10 @@ import {
   findCategoryById,
   findCategoryBySlug,
   findCategoryProducts,
-  updateCategory,
+} from "./category.repository";
+
+import {
+    updateCategory as updateCategoryRepository,
 } from "./category.repository";
 
 import type {
@@ -127,36 +130,36 @@ export async function createNewCategory(
   });
 }
 
-export async function editCategory(
-  id: number,
-  data: UpdateCategoryData
-) {
-  await getCategoryById(id);
+// export async function editCategory(
+//   id: number,
+//   data: UpdateCategoryData
+// ) {
+//   await getCategoryById(id);
 
-  if (
-    data.name !== undefined &&
-    !data.name.trim()
-  ) {
-    throw new Error("Category name cannot be empty");
-  }
+//   if (
+//     data.name !== undefined &&
+//     !data.name.trim()
+//   ) {
+//     throw new Error("Category name cannot be empty");
+//   }
 
-  if (
-    data.slug !== undefined &&
-    !data.slug.trim()
-  ) {
-    throw new Error("Category slug cannot be empty");
-  }
+//   if (
+//     data.slug !== undefined &&
+//     !data.slug.trim()
+//   ) {
+//     throw new Error("Category slug cannot be empty");
+//   }
 
-  return updateCategory(id, {
-    ...(data.name !== undefined
-      ? { name: data.name.trim() }
-      : {}),
+//   return updateCategory(id, {
+//     ...(data.name !== undefined
+//       ? { name: data.name.trim() }
+//       : {}),
 
-    ...(data.slug !== undefined
-      ? { slug: data.slug.trim() }
-      : {}),
-  });
-}
+//     ...(data.slug !== undefined
+//       ? { slug: data.slug.trim() }
+//       : {}),
+//   });
+// }
 
 export async function removeCategory(id: number) {
   const category = await getCategoryById(id);
@@ -168,4 +171,95 @@ export async function removeCategory(id: number) {
   }
 
   return deleteCategory(id);
+}
+
+export async function editCategory(
+  id: number,
+  data: UpdateCategoryData
+) {
+  await getCategoryById(id);
+
+  if (
+    data.name !== undefined &&
+    !data.name.trim()
+  ) {
+    throw new Error(
+      "Category name cannot be empty"
+    );
+  }
+
+  if (
+    data.slug !== undefined &&
+    !data.slug.trim()
+  ) {
+    throw new Error(
+      "Category slug cannot be empty"
+    );
+  }
+
+  const name =
+    data.name !== undefined
+      ? data.name.trim()
+      : undefined;
+
+  const slug =
+    data.slug !== undefined
+      ? data.slug.trim()
+      : undefined;
+
+  if (name !== undefined || slug !== undefined) {
+    const existingCategory =
+      await prisma.category.findFirst({
+        where: {
+          AND: [
+            {
+              id: {
+                not: id,
+              },
+            },
+            {
+              OR: [
+                ...(name !== undefined
+                  ? [{ name }]
+                  : []),
+
+                ...(slug !== undefined
+                  ? [{ slug }]
+                  : []),
+              ],
+            },
+          ],
+        },
+      });
+
+    if (existingCategory) {
+      if (
+        name !== undefined &&
+        existingCategory.name === name
+      ) {
+        throw new Error(
+          `Category with name "${name}" already exists`
+        );
+      }
+
+      if (
+        slug !== undefined &&
+        existingCategory.slug === slug
+      ) {
+        throw new Error(
+          `Category with slug "${slug}" already exists`
+        );
+      }
+    }
+  }
+
+  return updateCategoryRepository(id, {
+    ...(name !== undefined
+      ? { name }
+      : {}),
+
+    ...(slug !== undefined
+      ? { slug }
+      : {}),
+  });
 }

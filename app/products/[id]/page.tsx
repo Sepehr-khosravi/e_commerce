@@ -11,6 +11,7 @@ import {
 
 import AddToCart from "@/components/products/AddToCart";
 import RelatedProducts from "@/components/products/RelatedProducts";
+import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
 
 type Product = {
   id: number;
@@ -543,7 +544,7 @@ function ProductImageGallery({
       >
         <img
           key={`${currentIndex}-${images[currentIndex]}`}
-          src={images[currentIndex]}
+          src={normalizeImageUrl(images[currentIndex])}
           alt={`${title} - تصویر ${currentIndex + 1}`}
           draggable={false}
           className={`
@@ -653,7 +654,7 @@ function ProductImageGallery({
               `}
             >
               <img
-                src={image}
+                src={normalizeImageUrl(image)}
                 alt={`${title} - تصویر ${index + 1}`}
                 draggable={false}
                 className="h-full w-full object-contain"

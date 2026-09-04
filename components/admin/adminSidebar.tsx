@@ -13,7 +13,8 @@ import {
   Tags,
   Users,
   X,
-  GalleryThumbnails
+  GalleryThumbnails,
+  TypeIcon
 } from "lucide-react";
 
 const menuItems = [
@@ -51,6 +52,11 @@ const menuItems = [
     title : "مدیریت بنرها",
     href : "/private/banners",
     icon : GalleryThumbnails
+  },
+  {
+    title : "دسته بندی محصولات",
+    href : "/private/categories",
+    icon : TypeIcon
   }
 ];
 

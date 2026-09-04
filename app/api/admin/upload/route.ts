@@ -313,7 +313,7 @@ export async function POST(request: NextRequest) {
       );
 
       uploadedUrls.push(
-        `/uploads/products/${filename}`
+        `api/uploads/products/${filename}`
       );
     }
 

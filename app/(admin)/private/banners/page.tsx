@@ -535,15 +535,19 @@ function BannerCard({
   return (
     <div className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white transition duration-300 hover:-translate-y-0.5 hover:shadow-lg">
 
-      {/* Image */}
+      {/* Image */} 
 
       <div className="relative aspect-[16/6] overflow-hidden bg-neutral-100">
 
-        <img
-          src={banner.url}
-          alt={`بنر ${banner.id}`}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-        />
+      <img
+        src={
+          banner.url.startsWith("/")
+            ? banner.url
+            : `/${banner.url}`
+        }
+        alt={`بنر ${banner.id}`}
+        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+      />
 
         {/* ID */}
 
@@ -571,9 +575,9 @@ function BannerCard({
       <div className="flex items-center justify-between gap-3 p-4">
 
         <div className="min-w-0">
-          <p className="text-xs font-bold text-black">
+          {/* <p className="text-xs font-bold text-black">
             بنر شماره {banner.id}
-          </p>
+          </p> */}
 
           <p
             dir="ltr"

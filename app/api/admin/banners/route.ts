@@ -71,6 +71,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    console.log("BANNER BODY:", body);
+    console.log("BANNER URL:", JSON.stringify(body?.url));
+
     if (
       !body ||
       typeof body !== "object" ||

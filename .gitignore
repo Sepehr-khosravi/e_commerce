@@ -65,6 +65,11 @@ next-env.d.ts
 /public/uploads/**
 !/public/uploads/.gitkeep
 
+/storage
+/storage/products
+/storage/products/**
+!/storage/products/.gitkeep
+
 # temp files
 /tmp
 /temp

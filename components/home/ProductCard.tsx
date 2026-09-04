@@ -9,6 +9,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
 
 type Category = {
   id: number;
@@ -159,7 +160,7 @@ export default function ProductCard({
         >
           {hasImage ? (
             <img
-              src={product.images[0]}
+              src={normalizeImageUrl(product.images[0])}
               alt={product.title}
               loading="lazy"
               className="

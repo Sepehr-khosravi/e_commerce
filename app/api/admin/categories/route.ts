@@ -6,6 +6,46 @@ import { getCurrentUser } from "@/app/lib/auth/current-user";
 import {
   createNewCategory,
 } from "@/app/lib/categories/category.service";
+import { requireAdmin } from "@/app/lib/auth/authorization";
+import { findCategories } from "@/app/lib/categories/category.repository";
+
+
+export async function GET() {
+    try {
+        const { response } = await requireAdmin();
+
+        if (response) {
+            return response;
+        }
+
+        const categories = await findCategories();
+
+        return NextResponse.json(
+            {
+                categories: Array.isArray(categories)
+                    ? categories
+                    : [],
+            },
+            {
+                status: 200,
+            }
+        );
+    } catch (e) {
+        console.error(
+            "GET /api/admin/categories error:",
+            e
+        );
+
+        return NextResponse.json(
+            {
+                error: "Internal server error.",
+            },
+            {
+                status: 500,
+            }
+        );
+    }
+}
 
 export async function POST(
   request: NextRequest
@@ -16,6 +56,9 @@ export async function POST(
   let slug = "";
 
   try {
+
+    const { response } = await requireAdmin();
+    if (response) return response;
     // 1. Check authentication
     const user = await getCurrentUser();
 
