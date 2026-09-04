@@ -59,8 +59,7 @@ export async function POST(request: NextRequest) {
 
     const uploadDir = path.join(
       process.cwd(),
-      "public",
-      "uploads",
+      "storage",
       "products"
     );
 
