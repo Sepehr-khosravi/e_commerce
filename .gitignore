@@ -4,6 +4,7 @@
 /node_modules
 /.pnp
 .pnp.js
+.pnp.loader.mjs
 
 # testing
 /coverage
@@ -14,18 +15,26 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
 *.pem
+*.log
+*.tmp
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # local env files
 .env*.local
+.env
+.env.development.local
+.env.test.local
+.env.production.local
 
 # vercel
 .vercel
@@ -34,15 +43,50 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# prisma
 /generated/prisma
+/prisma/*.db
+/prisma/*.sqlite
 
+# AI assistants
 /.claude/
 /.agents/
 /.windsurf/
+/.cursor/
+/.vscode/
 
-/uploads
-/uploads/products
+# uploads (همه فایل‌های آپلودی)
+/uploads/
+/uploads/**
+!/uploads/.gitkeep
 
-/.uploads/
-/.uploads/products/
-.jpg
+# public uploads (عکس‌های محصولات)
+/public/uploads/
+/public/uploads/**
+!/public/uploads/.gitkeep
+
+# temp files
+/tmp
+/temp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# build tools
+.eslintcache
+.stylelintcache
+
+# storybook
+/storybook-static
+
+# cypress
+/cypress/videos/
+/cypress/screenshots/
