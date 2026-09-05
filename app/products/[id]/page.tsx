@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   Package,
   Truck,
+  Heart,
 } from "lucide-react";
 
 import AddToCart from "@/components/products/AddToCart";
@@ -35,21 +36,9 @@ type ProductResponse = {
 };
 
 function formatPrice(value: number | string) {
-  return new Intl.NumberFormat("fa-IR").format(
-    Number(value)
-  );
+  return new Intl.NumberFormat("fa-IR").format(Number(value));
 }
 
-/*
- * offer = درصد تخفیف
- *
- * مثال:
- * price = 1,000,000
- * offer = 20
- *
- * discountAmount = 200,000
- * finalPrice = 800,000
- */
 function getFinalPrice(
   price: number,
   offer: number | null
@@ -95,6 +84,24 @@ export default function ProductPage({
   const [error, setError] =
     useState<string | null>(null);
 
+  /*
+   * ============================================================
+   * FAVORITES
+   * ============================================================
+   */
+
+  const [isFavorite, setIsFavorite] =
+    useState(false);
+
+  const [favoriteLoading, setFavoriteLoading] =
+    useState(false);
+
+  const [favoriteChecked, setFavoriteChecked] =
+    useState(false);
+
+  /*
+   * Load product
+   */
   useEffect(() => {
     async function loadProduct() {
       try {
@@ -145,6 +152,163 @@ export default function ProductPage({
     loadProduct();
   }, [params]);
 
+  /*
+   * ============================================================
+   * LOAD FAVORITE STATUS
+   * ============================================================
+   *
+   * GET /api/favorites
+   *
+   * We don't make the product page fail if the user
+   * is not authenticated.
+   */
+  /*
+   * ============================================================
+   * LOAD FAVORITE STATUS
+   * ============================================================
+   *
+   * GET /api/favorites/[productId]
+   *
+   * Only checks the current product instead of
+   * downloading the user's entire favorites list.
+   */
+  useEffect(() => {
+    async function loadFavoriteStatus() {
+      try {
+        const { id } = await params;
+  
+        if (!/^\d+$/.test(id)) {
+          return;
+        }
+  
+        const productId = Number(id);
+  
+        const response = await fetch(
+          `/api/favorites/${productId}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+  
+        /*
+         * Favorites require authentication.
+         *
+         * If the user is not authenticated,
+         * don't make the product page fail.
+         */
+        if (!response.ok) {
+          setIsFavorite(false);
+          return;
+        }
+  
+        const data: {
+          favorite?: boolean;
+        } = await response.json();
+  
+        setIsFavorite(data.favorite === true);
+      } catch (error) {
+        console.error(
+          "Load favorite status error:",
+          error
+        );
+  
+        setIsFavorite(false);
+      } finally {
+        setFavoriteChecked(true);
+      }
+    }
+  
+    loadFavoriteStatus();
+  }, [params]);
+
+  /*
+   * ============================================================
+   * TOGGLE FAVORITE
+   * ============================================================
+   */
+  async function toggleFavorite() {
+    if (!product || favoriteLoading) {
+      return;
+    }
+  
+    try {
+      setFavoriteLoading(true);
+  
+      if (!isFavorite) {
+        const response = await fetch(
+          "/api/favorites",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              productId: product.id,
+            }),
+          }
+        );
+  
+        if (!response.ok) {
+          let message =
+            "خطا در افزودن محصول به علاقه‌مندی‌ها";
+  
+          try {
+            const data = await response.json();
+  
+            if (data?.error) {
+              message = data.error;
+            }
+          } catch {
+            // Response has no JSON body.
+          }
+  
+          throw new Error(message);
+        }
+  
+        setIsFavorite(true);
+      } else {
+        const response = await fetch(
+          `/api/favorites/${product.id}`,
+          {
+            method: "DELETE",
+          }
+        );
+  
+        if (!response.ok) {
+          let message =
+            "خطا در حذف محصول از علاقه‌مندی‌ها";
+  
+          try {
+            const data = await response.json();
+  
+            if (data?.error) {
+              message = data.error;
+            }
+          } catch {
+            // Response has no JSON body.
+          }
+  
+          throw new Error(message);
+        }
+  
+        setIsFavorite(false);
+      }
+    } catch (error) {
+      console.error(
+        "Toggle favorite error:",
+        error
+      );
+  
+      alert(
+        error instanceof Error
+          ? error.message
+          : "خطایی در علاقه‌مندی‌ها رخ داد."
+      );
+    } finally {
+      setFavoriteLoading(false);
+    }
+  }
   if (loading) {
     return <ProductPageSkeleton />;
   }
@@ -181,15 +345,6 @@ export default function ProductPage({
 
   const price = Number(product.price);
 
-  /*
-   * offer درصد تخفیف است.
-   *
-   * مثال:
-   * price = 1,000,000
-   * offer = 20
-   *
-   * finalPrice = 800,000
-   */
   const offer =
     product.offer !== null
       ? Number(product.offer)
@@ -255,13 +410,88 @@ export default function ProductPage({
           {/* Information */}
           <div className="flex flex-col justify-center">
 
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
-              Product
-            </span>
+            <div className="flex items-start justify-between gap-5">
 
-            <h1 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-black sm:text-4xl lg:text-5xl">
-              {product.title}
-            </h1>
+              <div className="min-w-0">
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
+                  Product
+                </span>
+
+                <h1 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-black sm:text-4xl lg:text-5xl">
+                  {product.title}
+                </h1>
+              </div>
+
+              {/* Favorite Button */}
+              <button
+                type="button"
+                onClick={toggleFavorite}
+                disabled={
+                  favoriteLoading ||
+                  !favoriteChecked
+                }
+                aria-label={
+                  isFavorite
+                    ? "حذف از علاقه‌مندی‌ها"
+                    : "افزودن به علاقه‌مندی‌ها"
+                }
+                aria-pressed={isFavorite}
+                className={`
+                  group
+                  mt-1
+                  flex
+                  h-12
+                  w-12
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-2xl
+                  border
+                  transition-all
+                  duration-300
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
+                  ${
+                    isFavorite
+                      ? "border-black bg-black text-white"
+                      : "border-neutral-200 bg-white text-black hover:border-black hover:bg-black hover:text-white"
+                  }
+                `}
+              >
+                <Heart
+                  size={20}
+                  strokeWidth={1.8}
+                  fill={
+                    isFavorite
+                      ? "currentColor"
+                      : "none"
+                  }
+                  className={`
+                    transition-transform
+                    duration-300
+                    ${
+                      favoriteLoading
+                        ? "animate-pulse"
+                        : "group-hover:scale-110"
+                    }
+                  `}
+                />
+              </button>
+
+            </div>
+
+            {/* Favorite Status */}
+            {favoriteChecked && isFavorite && (
+              <div className="mt-4 flex items-center gap-2 text-xs font-medium text-neutral-500">
+                <Heart
+                  size={13}
+                  fill="currentColor"
+                  className="text-black"
+                />
+
+                این محصول در علاقه‌مندی‌های شماست
+              </div>
+            )}
 
             {/* Price */}
             <div className="mt-8 border-y border-neutral-100 py-6">
@@ -394,23 +624,8 @@ export default function ProductPage({
  * ============================================================
  * PRODUCT GALLERY
  * ============================================================
- *
- * قابلیت‌ها:
- *
- * Desktop:
- * - Drag با موس
- * - حرکت نرم
- *
- * Mobile:
- * - Swipe با انگشت
- * - Touch support
- *
- * همچنین:
- * - Thumbnail پایین عکس
- * - دکمه‌های قبلی/بعدی
- * - تصویر فعال مشخص است
- * - اگر فقط یک عکس باشد thumbnail نمایش داده نمی‌شود
  */
+
 function ProductImageGallery({
   images,
   title,
@@ -420,8 +635,11 @@ function ProductImageGallery({
   title: string;
   isFeatured: boolean;
 }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
+  const [currentIndex, setCurrentIndex] =
+    useState(0);
+
+  const [isDragging, setIsDragging] =
+    useState(false);
 
   const startX = useRef(0);
   const currentX = useRef(0);
@@ -430,7 +648,6 @@ function ProductImageGallery({
   const hasImages = images.length > 0;
   const imageCount = images.length;
 
-  // اگر images از API تغییر کرد
   useEffect(() => {
     setCurrentIndex(0);
   }, [images]);
@@ -438,7 +655,6 @@ function ProductImageGallery({
   function goTo(index: number) {
     if (!imageCount) return;
 
-    // حلقه‌ای؛ بعد از آخر دوباره اول
     const nextIndex =
       (index + imageCount) % imageCount;
 
@@ -486,16 +702,12 @@ function ProductImageGallery({
     setIsDragging(false);
 
     const distance = dragDistance.current;
-
-    // حداقل مقدار لازم برای swipe
     const threshold = 50;
 
     if (Math.abs(distance) >= threshold) {
       if (distance < 0) {
-        // کشیدن به چپ → عکس بعدی
         nextImage();
       } else {
-        // کشیدن به راست → عکس قبلی
         previousImage();
       }
     }
@@ -529,13 +741,18 @@ function ProductImageGallery({
       {/* Main Image */}
       <div
         className={`
-          relative aspect-square
+          relative
+          aspect-square
           overflow-hidden
           rounded-[28px]
           bg-neutral-50
           select-none
           touch-pan-y
-          ${isDragging ? "cursor-grabbing" : "cursor-grab"}
+          ${
+            isDragging
+              ? "cursor-grabbing"
+              : "cursor-grab"
+          }
         `}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -544,11 +761,16 @@ function ProductImageGallery({
       >
         <img
           key={`${currentIndex}-${images[currentIndex]}`}
-          src={normalizeImageUrl(images[currentIndex])}
-          alt={`${title} - تصویر ${currentIndex + 1}`}
+          src={normalizeImageUrl(
+            images[currentIndex]
+          )}
+          alt={`${title} - تصویر ${
+            currentIndex + 1
+          }`}
           draggable={false}
           className={`
-            h-full w-full
+            h-full
+            w-full
             object-contain
             pointer-events-none
             ${
@@ -576,10 +798,14 @@ function ProductImageGallery({
             aria-label="تصویر قبلی"
             className="
               absolute
-              left-4 top-1/2
-              flex h-10 w-10
+              left-4
+              top-1/2
+              flex
+              h-10
+              w-10
               -translate-y-1/2
-              items-center justify-center
+              items-center
+              justify-center
               rounded-full
               bg-white/90
               text-black
@@ -590,9 +816,7 @@ function ProductImageGallery({
               active:scale-95
             "
           >
-            <ChevronLeft
-              size={18}
-            />
+            <ChevronLeft size={18} />
           </button>
         )}
 
@@ -607,12 +831,15 @@ function ProductImageGallery({
             aria-label="تصویر بعدی"
             className="
               absolute
-              right-4 top-1/2
-              flex h-10 w-10
-              -translate-y-1/2
+              right-4
+              top-1/2
+              flex
+              h-10
+              w-10
               -translate-y-1/2
               rotate-180
-              items-center justify-center
+              items-center
+              justify-center
               rounded-full
               bg-white/90
               text-black
@@ -623,9 +850,7 @@ function ProductImageGallery({
               active:scale-95
             "
           >
-            <ChevronLeft
-              size={18}
-            />
+            <ChevronLeft size={18} />
           </button>
         )}
       </div>
@@ -640,7 +865,8 @@ function ProductImageGallery({
               onClick={() => goTo(index)}
               className={`
                 relative
-                h-20 w-20
+                h-20
+                w-20
                 shrink-0
                 overflow-hidden
                 rounded-xl
@@ -655,7 +881,9 @@ function ProductImageGallery({
             >
               <img
                 src={normalizeImageUrl(image)}
-                alt={`${title} - تصویر ${index + 1}`}
+                alt={`${title} - تصویر ${
+                  index + 1
+                }`}
                 draggable={false}
                 className="h-full w-full object-contain"
               />
@@ -672,10 +900,14 @@ function ProductImageGallery({
               key={index}
               type="button"
               onClick={() => goTo(index)}
-              aria-label={`رفتن به تصویر ${index + 1}`}
+              aria-label={`رفتن به تصویر ${
+                index + 1
+              }`}
               className={`
-                h-1.5 rounded-full
-                transition-all duration-300
+                h-1.5
+                rounded-full
+                transition-all
+                duration-300
                 ${
                   index === currentIndex
                     ? "w-6 bg-black"

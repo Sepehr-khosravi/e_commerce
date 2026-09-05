@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, ArrowRight, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Heart, ArrowRight, RefreshCw, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import Navbar from "@/components/navbar/Navbar";
 import ProductCard from "@/components/home/ProductCard";
 import ProductSkeleton from "@/components/home/ProductSkeleton";
 
@@ -36,59 +35,240 @@ type Favorite = {
 
 type FavoritesResponse = {
   favorites: Favorite[];
+  nextCursor: number | null;
 };
+
+const PAGE_SIZE = 20;
 
 export default function FavoritesPage() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const [error, setError] = useState(false);
 
-  const fetchFavorites = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(false);
+  const [nextCursor, setNextCursor] =
+    useState<number | null>(null);
 
-      const response = await fetch("/api/favorites", {
-        method: "GET",
-        cache: "no-store",
-      });
+  const [hasMore, setHasMore] = useState(true);
 
-      if (response.status === 401) {
-        window.location.href = "/login?redirect=/dashboard/favorites";
-        return;
+  /*
+   * Prevent multiple requests from being fired
+   * at the same time by the IntersectionObserver.
+   */
+  const loadingMoreRef = useRef(false);
+
+  /*
+   * Sentinel element at the bottom of the list.
+   */
+  const loadMoreRef =
+    useRef<HTMLDivElement | null>(null);
+
+  /*
+   * ============================================================
+   * FETCH FAVORITES
+   * ============================================================
+   */
+  const fetchFavorites = useCallback(
+    async (cursor?: number) => {
+      try {
+        /*
+         * First request
+         */
+        if (cursor === undefined) {
+          setLoading(true);
+          setError(false);
+        } else {
+          /*
+           * Prevent duplicate pagination requests.
+           */
+          if (loadingMoreRef.current) {
+            return;
+          }
+
+          loadingMoreRef.current = true;
+          setLoadingMore(true);
+        }
+
+        const params = new URLSearchParams();
+
+        params.set(
+          "limit",
+          String(PAGE_SIZE)
+        );
+
+        if (cursor !== undefined) {
+          params.set(
+            "cursor",
+            String(cursor)
+          );
+        }
+
+        const response = await fetch(
+          `/api/favorites?${params.toString()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+        if (response.status === 401) {
+          window.location.href =
+            "/login?redirect=/dashboard/favorites";
+
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to fetch favorites"
+          );
+        }
+
+        const data: FavoritesResponse =
+          await response.json();
+
+        const newFavorites =
+          data.favorites ?? [];
+
+        /*
+         * First page
+         */
+        if (cursor === undefined) {
+          setFavorites(newFavorites);
+        } else {
+          /*
+           * Additional pages
+           */
+          setFavorites((current) => [
+            ...current,
+            ...newFavorites,
+          ]);
+        }
+
+        /*
+         * Backend tells us what cursor
+         * should be used for the next request.
+         */
+        setNextCursor(
+          data.nextCursor ?? null
+        );
+
+        /*
+         * No next cursor means we've reached
+         * the end of the list.
+         */
+        setHasMore(
+          data.nextCursor !== null &&
+            data.nextCursor !== undefined
+        );
+      } catch (error) {
+        console.error(
+          "Failed to fetch favorites:",
+          error
+        );
+
+        /*
+         * Only show the full error screen
+         * for the first request.
+         */
+        if (cursor === undefined) {
+          setError(true);
+        }
+      } finally {
+        if (cursor === undefined) {
+          setLoading(false);
+        } else {
+          loadingMoreRef.current = false;
+          setLoadingMore(false);
+        }
       }
+    },
+    []
+  );
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch favorites");
-      }
-
-      const data: FavoritesResponse =
-        await response.json();
-
-      setFavorites(data.favorites ?? []);
-    } catch (error) {
-      console.error(
-        "Failed to fetch favorites:",
-        error
-      );
-
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  /*
+   * ============================================================
+   * INITIAL LOAD
+   * ============================================================
+   */
   useEffect(() => {
     fetchFavorites();
   }, [fetchFavorites]);
 
   /*
-   * حذف محصول از علاقه‌مندی‌ها
+   * ============================================================
+   * INFINITE SCROLL
+   * ============================================================
+   */
+  useEffect(() => {
+    const target = loadMoreRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    const observer =
+      new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+
+          if (!entry.isIntersecting) {
+            return;
+          }
+
+          if (loading) {
+            return;
+          }
+
+          if (loadingMoreRef.current) {
+            return;
+          }
+
+          if (!hasMore) {
+            return;
+          }
+
+          if (nextCursor === null) {
+            return;
+          }
+
+          fetchFavorites(nextCursor);
+        },
+        {
+          /*
+           * Start loading before the user
+           * actually reaches the bottom.
+           */
+          rootMargin: "400px",
+          threshold: 0,
+        }
+      );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    fetchFavorites,
+    hasMore,
+    loading,
+    nextCursor,
+  ]);
+
+  /*
+   * ============================================================
+   * REMOVE FAVORITE
+   * ============================================================
    */
   const handleRemoveFavorite = async (
     productId: number
   ) => {
-    // Optimistic update
+    /*
+     * Optimistic update
+     */
     const previousFavorites = favorites;
 
     setFavorites((current) =>
@@ -117,10 +297,26 @@ export default function FavoritesPage() {
         error
       );
 
-      // اگر درخواست شکست خورد،
-      // لیست قبلی را برگردان
+      /*
+       * Restore previous list if DELETE fails.
+       */
       setFavorites(previousFavorites);
     }
+  };
+
+  /*
+   * ============================================================
+   * REFRESH
+   * ============================================================
+   */
+  const handleRefresh = async () => {
+    /*
+     * Reset pagination completely.
+     */
+    setNextCursor(null);
+    setHasMore(true);
+
+    await fetchFavorites();
   };
 
   return (
@@ -128,7 +324,6 @@ export default function FavoritesPage() {
       dir="rtl"
       className="min-h-screen bg-white"
     >
-
       <section className="mx-auto max-w-7xl px-5 pb-20 pt-10 sm:px-6 sm:pt-14 lg:px-8">
 
         {/* Header */}
@@ -169,10 +364,11 @@ export default function FavoritesPage() {
             )}
           </div>
 
-          {!loading && favorites.length > 0 && (
+          {!loading && !error && (
             <button
               type="button"
-              onClick={fetchFavorites}
+              onClick={handleRefresh}
+              disabled={loadingMore}
               className="
                 flex
                 h-10
@@ -188,25 +384,35 @@ export default function FavoritesPage() {
                 transition-all
                 duration-300
                 hover:bg-neutral-200
+                disabled:cursor-not-allowed
+                disabled:opacity-50
                 focus:outline-none
               "
             >
-              <RefreshCw size={14} />
+              <RefreshCw
+                size={14}
+                className={
+                  loadingMore
+                    ? "animate-spin"
+                    : ""
+                }
+              />
+
               بروزرسانی
             </button>
           )}
         </div>
 
-        {/* Loading */}
+        {/* Initial Loading */}
         {loading && (
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map(
-              (_, index) => (
-                <ProductSkeleton
-                  key={index}
-                />
-              )
-            )}
+            {Array.from({
+              length: 6,
+            }).map((_, index) => (
+              <ProductSkeleton
+                key={index}
+              />
+            ))}
           </div>
         )}
 
@@ -231,7 +437,11 @@ export default function FavoritesPage() {
 
             <button
               type="button"
-              onClick={fetchFavorites}
+              onClick={() => {
+                setNextCursor(null);
+                setHasMore(true);
+                fetchFavorites();
+              }}
               className="
                 mt-6
                 rounded-xl
@@ -307,56 +517,92 @@ export default function FavoritesPage() {
         {!loading &&
           !error &&
           favorites.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-              {favorites.map((favorite) => (
-                <div
-                  key={favorite.id}
-                  className="relative"
-                >
-                  <ProductCard
-                    product={favorite.product}
-                  />
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+                {favorites.map(
+                  (favorite) => (
+                    <div
+                      key={favorite.id}
+                      className="relative"
+                    >
+                      <ProductCard
+                        product={
+                          favorite.product
+                        }
+                      />
 
-                  {/* Remove button */}
-                  <button
-                    type="button"
-                    aria-label="حذف از علاقه‌مندی‌ها"
-                    onClick={() =>
-                      handleRemoveFavorite(
-                        favorite.productId
-                      )
-                    }
-                    className="
-                      absolute
-                      right-3
-                      top-3
-                      z-10
-                      flex
-                      h-9
-                      w-9
-                      items-center
-                      justify-center
-                      rounded-full
-                      bg-white/95
-                      text-black
-                      shadow-md
-                      backdrop-blur
-                      transition-all
-                      duration-300
-                      hover:scale-105
-                      hover:bg-black
-                      hover:text-white
-                      focus:outline-none
-                    "
-                  >
-                    <Heart
-                      size={17}
-                      className="fill-current"
-                    />
-                  </button>
+                      {/* Remove button */}
+                      <button
+                        type="button"
+                        aria-label="حذف از علاقه‌مندی‌ها"
+                        onClick={() =>
+                          handleRemoveFavorite(
+                            favorite.productId
+                          )
+                        }
+                        className="
+                          absolute
+                          right-3
+                          top-3
+                          z-10
+                          flex
+                          h-9
+                          w-9
+                          items-center
+                          justify-center
+                          rounded-full
+                          bg-white/95
+                          text-black
+                          shadow-md
+                          backdrop-blur
+                          transition-all
+                          duration-300
+                          hover:scale-105
+                          hover:bg-black
+                          hover:text-white
+                          focus:outline-none
+                        "
+                      >
+                        <Heart
+                          size={17}
+                          className="fill-current"
+                        />
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* =================================================
+                  INFINITE SCROLL SENTINEL
+                 ================================================= */}
+              {hasMore && (
+                <div
+                  ref={loadMoreRef}
+                  className="flex min-h-24 items-center justify-center"
+                >
+                  {loadingMore && (
+                    <div className="flex items-center gap-2 text-xs font-medium text-neutral-400">
+                      <Loader2
+                        size={16}
+                        className="animate-spin"
+                      />
+
+                      در حال دریافت محصولات بیشتر...
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              )}
+
+              {/* End of list */}
+              {!hasMore && (
+                <div className="mt-10 flex items-center justify-center">
+                  <div className="rounded-full bg-neutral-50 px-4 py-2 text-[11px] font-medium text-neutral-400">
+                    همه محصولات نمایش داده شدند
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
       </section>

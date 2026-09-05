@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/app/lib/auth/authorization";
 
 import {
+  addProductToFavorites,
   getUserFavorites,
 } from "@/app/lib/favorites/favorite.service";
 
-export async function GET(
-  request: NextRequest
-) {
+const MAX_LIMIT = 50;
+
+export async function GET(request: NextRequest) {
   try {
     const { user, response } = await requireUser();
 
@@ -16,14 +17,10 @@ export async function GET(
       return response;
     }
 
-    const searchParams =
-      request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
 
-    const cursorParam =
-      searchParams.get("cursor");
-
-    const limitParam =
-      searchParams.get("limit");
+    const cursorParam = searchParams.get("cursor");
+    const limitParam = searchParams.get("limit");
 
     const cursor = cursorParam
       ? Number(cursorParam)
@@ -35,8 +32,7 @@ export async function GET(
 
     if (
       cursor !== undefined &&
-      (!Number.isInteger(cursor) ||
-        cursor <= 0)
+      (!Number.isInteger(cursor) || cursor <= 0)
     ) {
       return NextResponse.json(
         {
@@ -48,10 +44,14 @@ export async function GET(
       );
     }
 
-    if (!Number.isInteger(limit) || limit <= 0) {
+    if (
+      !Number.isInteger(limit) ||
+      limit <= 0 ||
+      limit > MAX_LIMIT
+    ) {
       return NextResponse.json(
         {
-          error: "Invalid limit",
+          error: `Limit must be between 1 and ${MAX_LIMIT}`,
         },
         {
           status: 400,
@@ -59,20 +59,14 @@ export async function GET(
       );
     }
 
-    const result = await getUserFavorites(
-      user!.id,
-      {
-        cursor,
-        limit,
-      }
-    );
+    const result = await getUserFavorites(user!.id, {
+      cursor,
+      limit,
+    });
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error(
-      "GET /api/favorites:",
-      error
-    );
+    console.error("GET /api/favorites:", error);
 
     return NextResponse.json(
       {
@@ -80,6 +74,95 @@ export async function GET(
       },
       {
         status: 500,
+      }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { user, response } = await requireUser();
+
+    if (response) {
+      return response;
+    }
+
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Invalid JSON body",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      Array.isArray(body)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Invalid request body",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const productId = (body as {
+      productId?: unknown;
+    }).productId;
+
+    if (
+      typeof productId !== "number" ||
+      !Number.isInteger(productId) ||
+      productId <= 0
+    ) {
+      return NextResponse.json(
+        {
+          error: "Invalid product ID",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const favorite = await addProductToFavorites(
+      user!.id,
+      productId
+    );
+
+    return NextResponse.json(
+      {
+        favorite,
+      },
+      {
+        status: 201,
+      }
+    );
+  } catch (error) {
+    console.error("POST /api/favorites:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to add favorite";
+
+    return NextResponse.json(
+      {
+        error: message,
+      },
+      {
+        status: 400,
       }
     );
   }
