@@ -220,3 +220,16 @@ export async function countUserCartItems(
     },
   });
 }
+
+export async function findProductForCart(productId: number) {
+  return prisma.product.findUnique({
+    where: {
+      id: productId,
+    },
+    select: {
+      id: true,
+      count: true,
+      isActive: true,
+    },
+  });
+}

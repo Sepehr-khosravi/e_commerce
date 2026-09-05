@@ -1,16 +1,3 @@
-export type PaymentStatus =
-  | "PENDING"
-  | "PAID"
-  | "FAILED"
-  | "CANCELLED";
-
-export interface CreatePaymentData {
-  orderId: number;
-  amount: number;
-  description?: string;
-  callbackUrl: string;
-}
-
 export interface PaymentRequestResult {
   authority: string;
   paymentUrl: string;
@@ -18,17 +5,19 @@ export interface PaymentRequestResult {
 
 export interface PaymentVerifyResult {
   success: boolean;
-  transactionId?: string;
-  authority: string;
+  referenceId?: string;
+  message?: string;
 }
 
 export interface PaymentProvider {
-  createPayment(
-    data: CreatePaymentData
-  ): Promise<PaymentRequestResult>;
+  requestPayment(data: {
+    amount: number;
+    callbackUrl: string;
+    description?: string;
+  }): Promise<PaymentRequestResult>;
 
-  verifyPayment(
-    authority: string,
-    amount: number
-  ): Promise<PaymentVerifyResult>;
+  verifyPayment(data: {
+    authority: string;
+    amount: number;
+  }): Promise<PaymentVerifyResult>;
 }

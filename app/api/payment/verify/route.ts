@@ -13,7 +13,12 @@ export async function GET(
   try {
     const authority =
       request.nextUrl.searchParams.get(
-        "authority"
+        "Authority"
+      );
+
+    const status =
+      request.nextUrl.searchParams.get(
+        "Status"
       );
 
     if (!authority) {
@@ -28,15 +33,30 @@ export async function GET(
       );
     }
 
-    const payment =
+    if (
+      status &&
+      status.toUpperCase() !==
+        "OK"
+    ) {
+      return NextResponse.json({
+        success: false,
+
+        status:
+          "CANCELLED",
+
+        message:
+          "Payment was cancelled.",
+      });
+    }
+
+    const result =
       await verifyPayment(
         authority
       );
 
-    return NextResponse.json({
-      success: true,
-      payment,
-    });
+    return NextResponse.json(
+      result
+    );
   } catch (error) {
     console.error(
       "GET /api/payment/verify:",
@@ -46,6 +66,7 @@ export async function GET(
     return NextResponse.json(
       {
         success: false,
+
         error:
           error instanceof Error
             ? error.message

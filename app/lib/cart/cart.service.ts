@@ -6,6 +6,7 @@ import {
   deleteCartItem,
   findCartItem,
   findCartItemByProduct,
+  findProductForCart,
   findUserCart,
   updateCartItemQuantity,
 } from "./cart.repository";
@@ -25,7 +26,8 @@ export async function getUserCart(
     throw new Error("Invalid user ID");
   }
 
-  const limit = options?.limit ?? DEFAULT_CART_PAGE_SIZE;
+  const limit =
+    options?.limit ?? DEFAULT_CART_PAGE_SIZE;
 
   if (
     !Number.isInteger(limit) ||
@@ -52,8 +54,8 @@ export async function getUserCart(
   });
 
   /*
-   * If the user doesn't have a cart yet,
-   * create an empty one.
+   * Create an empty cart for the user
+   * if they don't have one yet.
    */
   if (!cart && cursor === undefined) {
     await createUserCart(userId);
@@ -64,8 +66,8 @@ export async function getUserCart(
   }
 
   /*
-   * If a cursor was supplied but the cart
-   * doesn't exist, return an empty result.
+   * A cursor was supplied but the user
+   * doesn't have a cart.
    */
   if (!cart) {
     return {
@@ -102,10 +104,47 @@ export async function addProductToCart(
     );
   }
 
+  /*
+   * Make sure the product actually exists
+   * and is available for purchase.
+   */
+  const product =
+    await findProductForCart(productId);
+
+  if (!product) {
+    throw new Error("Product not found");
+  }
+
+  if (!product.isActive) {
+    throw new Error(
+      "This product is not available"
+    );
+  }
+
+  if (product.count <= 0) {
+    throw new Error(
+      "This product is out of stock"
+    );
+  }
+
+  /*
+   * The requested quantity can never be
+   * greater than the available stock.
+   */
+  if (quantity > product.count) {
+    throw new Error(
+      "Requested quantity exceeds available stock"
+    );
+  }
+
+  /*
+   * Get or create the user's cart.
+   */
   const cart = await getUserCart(userId);
 
   /*
-   * Check if the product already exists.
+   * Check whether this product is already
+   * inside the cart.
    */
   const existingItem =
     await findCartItemByProduct(
@@ -117,9 +156,11 @@ export async function addProductToCart(
     const newQuantity =
       existingItem.quantity + quantity;
 
-    if (
-      newQuantity > existingItem.product.count
-    ) {
+    /*
+     * Make sure the total quantity in the
+     * cart doesn't exceed current stock.
+     */
+    if (newQuantity > product.count) {
       throw new Error(
         "Requested quantity exceeds available stock"
       );
@@ -134,7 +175,7 @@ export async function addProductToCart(
 
   /*
    * Limit the number of different products
-   * inside the cart.
+   * in the cart.
    */
   const currentItemCount =
     await countUserCartItems(userId);
@@ -144,27 +185,6 @@ export async function addProductToCart(
       `Your cart can contain a maximum of ${MAX_CART_ITEMS} different products`
     );
   }
-
-  /*
-   * Validate quantity against stock.
-   *
-   * We need the product information before
-   * creating a completely new cart item.
-   */
-  const product = await findCartItemByProduct(
-    userId,
-    productId
-  );
-
-  /*
-   * If there isn't an existing cart item,
-   * the product itself must be checked by Prisma
-   * through the relation.
-   *
-   * Quantity <= stock will also be enforced
-   * by the product validation in the API/service
-   * layer when the product is resolved.
-   */
 
   return createCartItem(
     {
@@ -195,13 +215,20 @@ export async function updateCartItem(
     );
   }
 
-  const item = await findCartItem(
-    userId,
-    itemId
-  );
+  const item =
+    await findCartItem(
+      userId,
+      itemId
+    );
 
   if (!item) {
     throw new Error("Cart item not found");
+  }
+
+  if (!item.product.isActive) {
+    throw new Error(
+      "This product is no longer available"
+    );
   }
 
   if (quantity > item.product.count) {
@@ -229,10 +256,11 @@ export async function removeProductFromCart(
     throw new Error("Invalid cart item ID");
   }
 
-  const item = await findCartItem(
-    userId,
-    itemId
-  );
+  const item =
+    await findCartItem(
+      userId,
+      itemId
+    );
 
   if (!item) {
     throw new Error("Cart item not found");

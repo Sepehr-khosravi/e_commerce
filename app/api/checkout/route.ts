@@ -1,14 +1,20 @@
 import {
-  NextRequest,
   NextResponse,
 } from "next/server";
 
-import { getCurrentUser } from "@/app/lib/auth/current-user";
-import { checkout } from "@/app/lib/checkout/checkout.service";
+import {
+  getCurrentUser,
+} from "@/app/lib/auth/current-user";
 
-export async function POST(
-  request: NextRequest
-) {
+import {
+  getUserCart,
+} from "@/app/lib/cart/cart.service";
+
+import {
+  prisma,
+} from "@/app/lib/prisma";
+
+export async function GET() {
   try {
     const user =
       await getCurrentUser();
@@ -24,70 +30,70 @@ export async function POST(
       );
     }
 
-    const body =
-      await request.json();
+    const [
+      profile,
+      cart,
+    ] = await Promise.all([
+      prisma.user.findUnique({
+        where: {
+          id: user.id,
+        },
 
-    const {
-      firstName,
-      lastName,
-      phone,
-      address,
-    } = body;
+        select: {
+          firstName: true,
+          lastName: true,
+          phoneNumber: true,
+          address: true,
+        },
+      }),
 
-    if (
-      typeof firstName !== "string" ||
-      typeof lastName !== "string" ||
-      typeof phone !== "string" ||
-      typeof address !== "string"
-    ) {
+      getUserCart(user.id),
+    ]);
+
+    if (!profile) {
       return NextResponse.json(
         {
           error:
-            "Invalid checkout information",
+            "User not found",
         },
         {
-          status: 400,
+          status: 404,
         }
       );
     }
 
-    const order = await checkout(
-      user.id,
-      {
-        firstName,
-        lastName,
-        phone,
-        address,
-      }
-    );
+    return NextResponse.json({
+      user: {
+        firstName:
+          profile.firstName,
 
-    return NextResponse.json(
-      {
-        message:
-          "Order created successfully",
-        order,
+        lastName:
+          profile.lastName,
+
+        phone:
+          profile.phoneNumber,
+
+        address:
+          profile.address ?? "",
       },
-      {
-        status: 201,
-      }
-    );
+
+      cart,
+    });
   } catch (error) {
     console.error(
-      "POST /api/checkout:",
+      "GET /api/checkout:",
       error
     );
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Checkout failed";
-
     return NextResponse.json(
       {
-        error: message,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load checkout",
       },
       {
-        status: 400,
+        status: 500,
       }
     );
   }

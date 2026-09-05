@@ -3,7 +3,9 @@ import {
   NextResponse,
 } from "next/server";
 
-import { requireAdmin } from "@/app/lib/auth/authorization";
+import {
+  requireAdmin,
+} from "@/app/lib/auth/authorization";
 
 import {
   changeOrderStatus,
@@ -28,6 +30,7 @@ const orderStatuses: OrderStatus[] = [
   "SHIPPED",
   "DELIVERED",
   "CANCELLED",
+  "REFUNDED",
 ];
 
 const paymentStatuses: PaymentStatus[] = [
@@ -126,17 +129,35 @@ export async function PATCH(
       );
     }
 
-    const body =
-      await request.json();
+    let body: {
+      status?: unknown;
+      paymentStatus?: unknown;
+    };
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Invalid JSON body",
+        },
+        { status: 400 }
+      );
+    }
+
+    const hasStatus =
+      body.status !== undefined;
+
+    const hasPaymentStatus =
+      body.paymentStatus !== undefined;
 
     if (
-      body.status === undefined &&
-      body.paymentStatus === undefined
+      !hasStatus &&
+      !hasPaymentStatus
     ) {
       return NextResponse.json(
         {
-          error:
-            "Nothing to update",
+          error: "Nothing to update",
         },
         { status: 400 }
       );
@@ -144,16 +165,19 @@ export async function PATCH(
 
     let order;
 
-    if (body.status !== undefined) {
+    /*
+     * Update order status
+     */
+    if (hasStatus) {
       if (
+        typeof body.status !== "string" ||
         !orderStatuses.includes(
-          body.status
+          body.status as OrderStatus
         )
       ) {
         return NextResponse.json(
           {
-            error:
-              "Invalid order status",
+            error: "Invalid order status",
           },
           { status: 400 }
         );
@@ -162,17 +186,18 @@ export async function PATCH(
       order =
         await changeOrderStatus(
           orderId,
-          body.status
+          body.status as OrderStatus
         );
     }
 
-    if (
-      body.paymentStatus !==
-      undefined
-    ) {
+    /*
+     * Update payment status
+     */
+    if (hasPaymentStatus) {
       if (
+        typeof body.paymentStatus !== "string" ||
         !paymentStatuses.includes(
-          body.paymentStatus
+          body.paymentStatus as PaymentStatus
         )
       ) {
         return NextResponse.json(
@@ -187,8 +212,14 @@ export async function PATCH(
       order =
         await changePaymentStatus(
           orderId,
-          body.paymentStatus
+          body.paymentStatus as PaymentStatus
         );
+    }
+
+    if (!order) {
+      throw new Error(
+        "Order update failed"
+      );
     }
 
     return NextResponse.json({

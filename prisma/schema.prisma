@@ -221,7 +221,7 @@ model Order {
   phone     String
   address   String
 
-  totalPrice Float
+  totalPrice Decimal @db.Decimal(12, 2)
 
   status        OrderStatus   @default(PENDING)
   paymentStatus PaymentStatus @default(PENDING)
@@ -233,10 +233,6 @@ model Order {
   updatedAt DateTime @updatedAt
 }
 
-// =========================
-// ORDER ITEMS
-// =========================
-
 model OrderItem {
   id Int @id @default(autoincrement())
 
@@ -247,11 +243,11 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   productTitle String
-  productPrice Decimal
+  productPrice Decimal @db.Decimal(12, 2)
+  productOffer Decimal @db.Decimal(5, 2)
 
-  quantity Int
-
-  totalPrice Decimal
+  quantity   Int
+  totalPrice Decimal @db.Decimal(12, 2)
 
   createdAt DateTime @default(now())
 
@@ -283,7 +279,6 @@ model Payment {
   @@index([orderId])
   @@index([status])
 }
-
 
 model Banner {
   id        Int      @id @default(autoincrement())

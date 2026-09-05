@@ -3,7 +3,9 @@ import {
   NextResponse,
 } from "next/server";
 
-import { requireAdmin } from "@/app/lib/auth/authorization";
+import {
+  requireAdmin,
+} from "@/app/lib/auth/authorization";
 
 import {
   getOrders,
@@ -20,6 +22,7 @@ const orderStatuses: OrderStatus[] = [
   "SHIPPED",
   "DELIVERED",
   "CANCELLED",
+  "REFUNDED",
 ];
 
 const paymentStatuses: PaymentStatus[] = [
@@ -28,6 +31,8 @@ const paymentStatuses: PaymentStatus[] = [
   "FAILED",
   "REFUNDED",
 ];
+
+const MAX_LIMIT = 50;
 
 export async function GET(
   request: NextRequest
@@ -60,9 +65,11 @@ export async function GET(
     const limitParam =
       searchParams.get("limit");
 
-    let userId: number | undefined;
+    let userId:
+      | number
+      | undefined;
 
-    if (userIdParam) {
+    if (userIdParam !== null) {
       userId = Number(userIdParam);
 
       if (
@@ -71,16 +78,18 @@ export async function GET(
       ) {
         return NextResponse.json(
           {
-            error: "Invalid userId",
+            error: "Invalid user ID",
           },
           { status: 400 }
         );
       }
     }
 
-    let cursor: number | undefined;
+    let cursor:
+      | number
+      | undefined;
 
-    if (cursorParam) {
+    if (cursorParam !== null) {
       cursor = Number(cursorParam);
 
       if (
@@ -96,25 +105,29 @@ export async function GET(
       }
     }
 
-    const limit = limitParam
-      ? Number(limitParam)
-      : 20;
+    const limit =
+      limitParam !== null
+        ? Number(limitParam)
+        : 20;
 
     if (
       !Number.isInteger(limit) ||
-      limit <= 0
+      limit <= 0 ||
+      limit > MAX_LIMIT
     ) {
       return NextResponse.json(
         {
-          error: "Invalid limit",
+          error: `Limit must be between 1 and ${MAX_LIMIT}`,
         },
         { status: 400 }
       );
     }
 
-    let status: OrderStatus | undefined;
+    let status:
+      | OrderStatus
+      | undefined;
 
-    if (statusParam) {
+    if (statusParam !== null) {
       if (
         !orderStatuses.includes(
           statusParam as OrderStatus
@@ -122,7 +135,8 @@ export async function GET(
       ) {
         return NextResponse.json(
           {
-            error: "Invalid order status",
+            error:
+              "Invalid order status",
           },
           { status: 400 }
         );
@@ -136,7 +150,9 @@ export async function GET(
       | PaymentStatus
       | undefined;
 
-    if (paymentStatusParam) {
+    if (
+      paymentStatusParam !== null
+    ) {
       if (
         !paymentStatuses.includes(
           paymentStatusParam as PaymentStatus
@@ -155,15 +171,18 @@ export async function GET(
         paymentStatusParam as PaymentStatus;
     }
 
-    const result = await getOrders({
-      userId,
-      status,
-      paymentStatus,
-      cursor,
-      limit,
-    });
+    const result =
+      await getOrders({
+        userId,
+        status,
+        paymentStatus,
+        cursor,
+        limit,
+      });
 
-    return NextResponse.json(result);
+    return NextResponse.json(
+      result
+    );
   } catch (error) {
     console.error(
       "GET /api/admin/orders:",
