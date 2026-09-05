@@ -8,7 +8,12 @@ import {
   getUserCart,
 } from "@/app/lib/cart/cart.service";
 
-export async function GET() {
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 20;
+
+export async function GET(
+  request: NextRequest
+) {
   try {
     const { user, response } = await requireUser();
 
@@ -16,9 +21,55 @@ export async function GET() {
       return response;
     }
 
-    const cart = await getUserCart(user.id);
+    const { searchParams } =
+      new URL(request.url);
 
-    return NextResponse.json({ cart });
+    const rawLimit = searchParams.get("limit");
+    const rawCursor = searchParams.get("cursor");
+
+    const limit =
+      rawLimit === null
+        ? DEFAULT_LIMIT
+        : Number(rawLimit);
+
+    const cursor =
+      rawCursor === null
+        ? undefined
+        : Number(rawCursor);
+
+    if (
+      !Number.isInteger(limit) ||
+      limit <= 0 ||
+      limit > MAX_LIMIT
+    ) {
+      return NextResponse.json(
+        {
+          error: `limit must be between 1 and ${MAX_LIMIT}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      cursor !== undefined &&
+      (!Number.isInteger(cursor) || cursor <= 0)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Invalid cursor",
+        },
+        { status: 400 }
+      );
+    }
+
+    const cart = await getUserCart(user.id, {
+      limit,
+      cursor,
+    });
+
+    return NextResponse.json({
+      cart,
+    });
   } catch (error) {
     console.error("GET /api/cart:", error);
 
@@ -31,7 +82,9 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest
+) {
   try {
     const { user, response } = await requireUser();
 
@@ -66,14 +119,19 @@ export async function POST(request: NextRequest) {
     }
 
     const rawProductId = (
-      body as { productId?: unknown }
+      body as {
+        productId?: unknown;
+      }
     ).productId;
 
     const rawQuantity = (
-      body as { quantity?: unknown }
+      body as {
+        quantity?: unknown;
+      }
     ).quantity;
 
     const productId = Number(rawProductId);
+
     const quantity =
       rawQuantity === undefined
         ? 1
@@ -110,7 +168,9 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json(
-      { item },
+      {
+        item,
+      },
       { status: 201 }
     );
   } catch (error) {
@@ -122,7 +182,9 @@ export async function POST(request: NextRequest) {
         : "Failed to add product to cart";
 
     return NextResponse.json(
-      { error: message },
+      {
+        error: message,
+      },
       { status: 400 }
     );
   }

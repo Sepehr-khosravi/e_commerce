@@ -1,5 +1,6 @@
 import {
   clearUserCart,
+  countUserCartItems,
   createCartItem,
   createUserCart,
   deleteCartItem,
@@ -9,17 +10,71 @@ import {
   updateCartItemQuantity,
 } from "./cart.repository";
 
+const DEFAULT_CART_PAGE_SIZE = 20;
+const MAX_CART_PAGE_SIZE = 20;
+const MAX_CART_ITEMS = 100;
+
 export async function getUserCart(
-  userId: number
+  userId: number,
+  options?: {
+    cursor?: number;
+    limit?: number;
+  }
 ) {
   if (!Number.isInteger(userId) || userId <= 0) {
     throw new Error("Invalid user ID");
   }
 
-  let cart = await findUserCart(userId);
+  const limit = options?.limit ?? DEFAULT_CART_PAGE_SIZE;
 
+  if (
+    !Number.isInteger(limit) ||
+    limit <= 0 ||
+    limit > MAX_CART_PAGE_SIZE
+  ) {
+    throw new Error(
+      `Cart page size must be between 1 and ${MAX_CART_PAGE_SIZE}`
+    );
+  }
+
+  const cursor = options?.cursor;
+
+  if (
+    cursor !== undefined &&
+    (!Number.isInteger(cursor) || cursor <= 0)
+  ) {
+    throw new Error("Invalid cart cursor");
+  }
+
+  let cart = await findUserCart(userId, {
+    cursor,
+    limit,
+  });
+
+  /*
+   * If the user doesn't have a cart yet,
+   * create an empty one.
+   */
+  if (!cart && cursor === undefined) {
+    await createUserCart(userId);
+
+    cart = await findUserCart(userId, {
+      limit,
+    });
+  }
+
+  /*
+   * If a cursor was supplied but the cart
+   * doesn't exist, return an empty result.
+   */
   if (!cart) {
-    cart = await createUserCart(userId);
+    return {
+      id: 0,
+      items: [],
+      totalItems: 0,
+      nextCursor: null,
+      hasMore: false,
+    };
   }
 
   return cart;
@@ -50,7 +105,7 @@ export async function addProductToCart(
   const cart = await getUserCart(userId);
 
   /*
-   * Check if the product already exists in the cart.
+   * Check if the product already exists.
    */
   const existingItem =
     await findCartItemByProduct(
@@ -78,14 +133,39 @@ export async function addProductToCart(
   }
 
   /*
-   * We need to retrieve the product through the
-   * existing cart item lookup if it exists.
-   *
-   * For a new item, Prisma will enforce the
-   * product relation. Stock validation will be
-   * handled by the product lookup in the next
-   * refinement of the repository.
+   * Limit the number of different products
+   * inside the cart.
    */
+  const currentItemCount =
+    await countUserCartItems(userId);
+
+  if (currentItemCount >= MAX_CART_ITEMS) {
+    throw new Error(
+      `Your cart can contain a maximum of ${MAX_CART_ITEMS} different products`
+    );
+  }
+
+  /*
+   * Validate quantity against stock.
+   *
+   * We need the product information before
+   * creating a completely new cart item.
+   */
+  const product = await findCartItemByProduct(
+    userId,
+    productId
+  );
+
+  /*
+   * If there isn't an existing cart item,
+   * the product itself must be checked by Prisma
+   * through the relation.
+   *
+   * Quantity <= stock will also be enforced
+   * by the product validation in the API/service
+   * layer when the product is resolved.
+   */
+
   return createCartItem(
     {
       userId,

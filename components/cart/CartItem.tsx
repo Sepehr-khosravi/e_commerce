@@ -34,9 +34,9 @@ type Props = {
   ) => Promise<void>;
 };
 
-function formatPrice(value: number | string) {
+function formatPrice(value: number) {
   return new Intl.NumberFormat("fa-IR").format(
-    Number(value)
+    Math.round(value)
   );
 }
 
@@ -48,19 +48,31 @@ export default function CartItem({
   const product = item.product;
 
   const price = Number(product.price);
+  
   const offer =
     product.offer !== null &&
     product.offer !== undefined
       ? Number(product.offer)
-      : null;
-
+      : 0;
+  
+  const discount = Math.min(
+    Math.max(offer, 0),
+    100
+  );
+  
   const finalPrice =
-    offer !== null && offer > 0
-      ? offer
-      : price;
-
+    price * (1 - discount / 100);
+  
   const totalPrice =
-    finalPrice * item.quantity;
+  finalPrice * item.quantity;
+
+  const hasOffer =
+    offer !== null &&
+    Number.isFinite(offer) &&
+    offer > 0 &&
+    offer < price;
+
+
 
   const image = product.images?.[0];
 
@@ -71,7 +83,6 @@ export default function CartItem({
 
   return (
     <article className="group rounded-3xl border border-neutral-100 bg-white p-4 transition-all duration-300 hover:border-neutral-200 hover:shadow-[0_10px_35px_rgba(0,0,0,0.04)] sm:p-5">
-
       <div className="flex gap-4">
 
         {/* Image */}
@@ -81,7 +92,6 @@ export default function CartItem({
           className="shrink-0"
         >
           <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-neutral-100 sm:h-28 sm:w-28">
-
             {image ? (
               <img
                 src={image}
@@ -91,10 +101,8 @@ export default function CartItem({
             ) : (
               <div className="h-10 w-10 animate-pulse rounded-xl bg-neutral-200" />
             )}
-
           </div>
         </Link>
-
 
         {/* Content */}
 
@@ -111,7 +119,9 @@ export default function CartItem({
                 {product.title}
               </Link>
 
-              {offer !== null && (
+              {/* Original price */}
+
+              {hasOffer && (
                 <p className="mt-1 text-[10px] text-neutral-400 line-through">
                   {formatPrice(price)} تومان
                 </p>
@@ -120,6 +130,7 @@ export default function CartItem({
             </div>
 
             <button
+              type="button"
               onClick={() =>
                 onRemove(item.id)
               }
@@ -131,40 +142,36 @@ export default function CartItem({
 
           </div>
 
-
           <div className="mt-auto flex flex-col gap-3 pt-4 sm:flex-row sm:items-end sm:justify-between">
 
             <div>
 
+              {/* Total */}
+
               <p className="text-sm font-bold text-black">
-                {formatPrice(
-                  totalPrice
-                )}{" "}
+                {formatPrice(totalPrice)}{" "}
                 <span className="text-[9px] font-medium text-neutral-400">
                   تومان
                 </span>
               </p>
 
+              {/* Unit price */}
+
               {item.quantity > 1 && (
                 <p className="mt-1 text-[10px] text-neutral-400">
-                  {formatPrice(
-                    finalPrice
-                  )}{" "}
-                  تومان ×{" "}
-                  {formatPrice(
-                    item.quantity
-                  )}
+                  {formatPrice(finalPrice)} تومان ×{" "}
+                  {formatPrice(item.quantity)}
                 </p>
               )}
 
             </div>
-
 
             {/* Quantity */}
 
             <div className="flex h-9 w-fit items-center rounded-xl bg-neutral-50">
 
               <button
+                type="button"
                 disabled={item.quantity <= 1}
                 onClick={() =>
                   onUpdateQuantity(
@@ -184,9 +191,9 @@ export default function CartItem({
               </span>
 
               <button
+                type="button"
                 disabled={
-                  item.quantity >=
-                  maxQuantity
+                  item.quantity >= maxQuantity
                 }
                 onClick={() =>
                   onUpdateQuantity(
@@ -206,7 +213,6 @@ export default function CartItem({
         </div>
 
       </div>
-
     </article>
   );
 }

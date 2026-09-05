@@ -5,13 +5,24 @@ import type {
   UpdateCartItemData,
 } from "./cart.types";
 
-export async function findUserCart(userId: number) {
-  return prisma.cart.findUnique({
+export async function findUserCart(
+  userId: number,
+  options?: {
+    cursor?: number;
+    limit?: number;
+  }
+) {
+  const limit = options?.limit ?? 20;
+  const cursor = options?.cursor;
+
+  const cart = await prisma.cart.findUnique({
     where: {
       userId,
     },
 
-    include: {
+    select: {
+      id: true,
+
       items: {
         where: {
           product: {
@@ -23,6 +34,17 @@ export async function findUserCart(userId: number) {
           id: "asc",
         },
 
+        take: limit + 1,
+
+        ...(cursor
+          ? {
+              skip: 1,
+              cursor: {
+                id: cursor,
+              },
+            }
+          : {}),
+
         include: {
           product: {
             include: {
@@ -33,6 +55,39 @@ export async function findUserCart(userId: number) {
       },
     },
   });
+
+  if (!cart) {
+    return null;
+  }
+
+  const hasMore = cart.items.length > limit;
+
+  const items = hasMore
+    ? cart.items.slice(0, limit)
+    : cart.items;
+
+  const nextCursor =
+    hasMore && items.length > 0
+      ? items[items.length - 1].id
+      : null;
+
+  const totalItems = await prisma.cartItem.count({
+    where: {
+      cartId: cart.id,
+
+      product: {
+        isActive: true,
+      },
+    },
+  });
+
+  return {
+    id: cart.id,
+    items,
+    totalItems,
+    nextCursor,
+    hasMore,
+  };
 }
 
 export async function createUserCart(
@@ -146,6 +201,18 @@ export async function clearUserCart(
   userId: number
 ) {
   return prisma.cartItem.deleteMany({
+    where: {
+      cart: {
+        userId,
+      },
+    },
+  });
+}
+
+export async function countUserCartItems(
+  userId: number
+) {
+  return prisma.cartItem.count({
     where: {
       cart: {
         userId,
