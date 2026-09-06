@@ -12,6 +12,11 @@ import {
   X,
 } from "lucide-react";
 
+
+//for loading images.
+import {
+  normalizeImageUrl
+} from "@/app/lib/common/imageNormalizer"
 type Product = {
   id: number;
   title: string;
@@ -987,7 +992,7 @@ function ProductImage({
     <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
       {product.images?.[0] ? (
         <img
-          src={product.images[0]}
+          src={normalizeImageUrl(product.images[0])}
           alt={product.title}
           className="h-full w-full object-contain"
         />
@@ -1931,7 +1936,7 @@ function CreateProductModal({
                       className="group relative aspect-square overflow-hidden rounded-2xl bg-neutral-100"
                     >
                       <img
-                        src={image.preview}
+                        src={normalizeImageUrl(image.preview)}
                         alt={`تصویر ${
                           index + 1
                         }`}

@@ -16,6 +16,7 @@ import {
   User,
   X,
 } from "lucide-react";
+import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
 
 type OrderStatus =
   | "PENDING"
@@ -39,9 +40,12 @@ type Product = {
 
 type OrderItem = {
   id: number;
+  productId: number;
+  productTitle: string;
+  productPrice: number | string;
+  productOffer: number | string;
   quantity: number;
-  price: number | string;
-  product: Product;
+  totalPrice: number | string;
 };
 
 type User = {
@@ -80,7 +84,7 @@ type OrdersResponse = {
 };
 
 const ORDER_STATUSES: OrderStatus[] = [
-  "PENDING",
+  "PENDING", 
   "PROCESSING",
   "SHIPPED",
   "DELIVERED",
@@ -1031,6 +1035,7 @@ function OrderRow({
           {formatPrice(
             order.totalPrice
           )}{" "}
+
           تومان
         </p>
       </td>
@@ -1503,83 +1508,73 @@ function OrderDetailsModal({
 
             <div className="overflow-hidden rounded-2xl border border-neutral-200">
               <div className="divide-y divide-neutral-100">
-                {order.items?.map(
-                  (item) => (
-                    <div
-                      key={item.id}
-                      className="flex gap-4 p-4"
-                    >
-                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
-                        {item.product
-                          ?.images?.[0] ? (
-                          <img
-                            src={
-                              item
-                                .product
-                                .images[0]
-                            }
-                            alt={
-                              item
-                                .product
-                                .title
-                            }
-                            className="h-full w-full object-contain"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <Package
-                              size={
-                                18
-                              }
-                              className="text-neutral-300"
-                            />
-                          </div>
+              {order.items?.map((item) => {
+                const unitPrice = Number(
+                  item.productPrice
+                );
+              
+                const offer = Number(
+                  item.productOffer
+                );
+              
+                const totalPrice = Number(
+                  item.totalPrice
+                );
+              
+                return (
+                  <div
+                    key={item.id}
+                    className="flex gap-4 p-4"
+                  >
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-neutral-100">
+                      <Package
+                        size={18}
+                        className="text-neutral-300"
+                      />
+                      {/* <img
+                      src={normalizeImageUrl()}
+                      alt={"عکس محصول"}
+                        className="h-full w-full object-contain"
+                        /> */}
+                    </div>
+              
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-black">
+                        {item.productTitle}
+                      </p>
+              
+                      <div className="mt-2 flex flex-wrap gap-3 text-xs text-neutral-400">
+                        <span>
+                          تعداد:{" "}
+                          {new Intl.NumberFormat(
+                            "fa-IR"
+                          ).format(item.quantity)}
+                        </span>
+              
+                        <span>
+                          قیمت واحد:{" "}
+                          {formatPrice(unitPrice)}{" "}
+                          تومان
+                        </span>
+              
+                        {offer > 0 && (
+                          <span>
+                            تخفیف:{" "}
+                            {formatPrice(offer)}٪
+                          </span>
                         )}
                       </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold text-black">
-                          {
-                            item
-                              .product
-                              ?.title
-                          }
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-neutral-400">
-                          <span>
-                            تعداد:{" "}
-                            {new Intl.NumberFormat(
-                              "fa-IR"
-                            ).format(
-                              item.quantity
-                            )}
-                          </span>
-
-                          <span>
-                            قیمت واحد:{" "}
-                            {formatPrice(
-                              item.price
-                            )}{" "}
-                            تومان
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 text-left">
-                        <p className="text-sm font-bold text-black">
-                          {formatPrice(
-                            Number(
-                              item.price
-                            ) *
-                              item.quantity
-                          )}{" "}
-                          تومان
-                        </p>
-                      </div>
                     </div>
-                  )
-                )}
+              
+                    <div className="shrink-0 text-left">
+                      <p className="text-sm font-bold text-black">
+                        {formatPrice(totalPrice)}{" "}
+                        تومان
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
               </div>
 
               <div className="border-t border-neutral-100 bg-neutral-50 p-4">
