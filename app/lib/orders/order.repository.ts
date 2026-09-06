@@ -326,16 +326,25 @@ export async function cancelOrderAndRestoreStock(
   );
 }
 
-export async function findOrderById(
-  orderId: number
-) {
+export async function findOrderById(orderId: number) {
   return prisma.order.findUnique({
-    where: {
-      id: orderId,
-    },
+    where: { id: orderId },
     include: {
-      items: true,
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              title: true,
+              images: true,
+              price: true,
+            },
+          },
+        },
+      },
+
       payments: true,
+
       user: {
         select: {
           id: true,

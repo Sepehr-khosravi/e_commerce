@@ -61,3 +61,18 @@ export async function markPaymentAsFailed(
     },
   });
 }
+
+
+export async function findPendingPaymentByOrder(
+  orderId: number
+) {
+  return prisma.payment.findFirst({
+    where: {
+      orderId,
+      status: "PENDING",
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}

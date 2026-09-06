@@ -5,6 +5,7 @@ import {
 
 import {
   verifyPayment,
+  cancelPayment,
 } from "@/app/lib/payment/payment.service";
 
 export async function GET(
@@ -24,6 +25,7 @@ export async function GET(
     if (!authority) {
       return NextResponse.json(
         {
+          success: false,
           error:
             "Payment authority is required",
         },
@@ -33,22 +35,34 @@ export async function GET(
       );
     }
 
+    /*
+     * If the user cancelled the payment
+     * on ZarinPal, only the payment attempt
+     * becomes FAILED.
+     *
+     * The Order remains PENDING and can be
+     * paid again.
+     */
     if (
       status &&
-      status.toUpperCase() !==
-        "OK"
+      status.toUpperCase() !== "OK"
     ) {
-      return NextResponse.json({
-        success: false,
+      const result =
+        await cancelPayment(
+          authority
+        );
 
-        status:
-          "CANCELLED",
-
-        message:
-          "Payment was cancelled.",
-      });
+      return NextResponse.json(
+        result
+      );
     }
 
+    /*
+     * Status=OK is NOT enough to trust.
+     *
+     * verifyPayment() actually contacts
+     * ZarinPal and verifies the authority.
+     */
     const result =
       await verifyPayment(
         authority
@@ -66,7 +80,6 @@ export async function GET(
     return NextResponse.json(
       {
         success: false,
-
         error:
           error instanceof Error
             ? error.message
