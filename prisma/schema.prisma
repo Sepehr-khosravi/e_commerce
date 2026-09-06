@@ -238,21 +238,22 @@ model Order {
 // =========================
 
 model OrderItem {
-  id            Int      @id @default(autoincrement())
-  orderId       Int
-  order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id Int @id @default(autoincrement())
 
-  productId     Int
-  product       Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  productTitle  String
-  productPrice  Decimal  @db.Decimal(12, 2)
-  productOffer  Decimal  @db.Decimal(5, 2)
-  productImage  String?
-  quantity      Int
-  totalPrice    Decimal  @db.Decimal(12, 2)
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
-  createdAt     DateTime @default(now())
+  productTitle String
+  productPrice Decimal @db.Decimal(12, 2)
+  productOffer Decimal @db.Decimal(5, 2)
+
+  quantity   Int
+  totalPrice Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
 
   @@index([orderId])
   @@index([productId])
