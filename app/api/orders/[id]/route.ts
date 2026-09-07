@@ -3,9 +3,12 @@ import {
   NextResponse,
 } from "next/server";
 
-import { getCurrentUser } from "@/app/lib/auth/current-user";
 import {
-  getOrderById,
+  getCurrentUser,
+} from "@/app/lib/auth/current-user";
+
+import {
+  getOrderByUser,
 } from "@/app/lib/orders/order.service";
 
 interface RouteContext {
@@ -27,14 +30,17 @@ export async function GET(
         {
           error: "Unauthorized",
         },
-        { status: 401 }
+        {
+          status: 401,
+        }
       );
     }
 
     const { id } =
       await context.params;
 
-    const orderId = Number(id);
+    const orderId =
+      Number(id);
 
     if (
       !Number.isInteger(orderId) ||
@@ -42,26 +48,20 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          error: "Invalid order ID",
+          error:
+            "Invalid order ID",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     const order =
-      await getOrderById(orderId);
-
-    /*
-     * A customer can only see their own order.
-     */
-    if (order.userId !== user.id) {
-      return NextResponse.json(
-        {
-          error: "Forbidden",
-        },
-        { status: 403 }
+      await getOrderByUser(
+        orderId,
+        user.id
       );
-    }
 
     return NextResponse.json({
       order,
@@ -83,7 +83,8 @@ export async function GET(
       },
       {
         status:
-          message === "Order not found"
+          message ===
+          "Order not found"
             ? 404
             : 500,
       }

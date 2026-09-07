@@ -3,7 +3,8 @@ export type OrderStatus =
   | "PROCESSING"
   | "SHIPPED"
   | "DELIVERED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "REFUNDED";
 
 export type PaymentStatus =
   | "PENDING"
@@ -12,33 +13,35 @@ export type PaymentStatus =
   | "REFUNDED";
 
 export interface CreateOrderData {
-  userId: number;
-
   firstName: string;
   lastName: string;
   phone: string;
   address: string;
 }
 
-export interface UpdateOrderStatusData {
-  status: OrderStatus;
+export interface CreateOrderItemData {
+  productId: number;
+  productTitle: string;
+  productPrice: number;
+  offer: number;
+  quantity: number;
+  totalPrice: number;
 }
 
-export interface UpdatePaymentStatusData {
-  status: PaymentStatus;
+export interface CreateOrderRecordData {
+  userId: number;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  totalPrice: number;
+  items: CreateOrderItemData[];
 }
 
-export interface SearchOrdersOptions {
+export interface GetOrdersOptions {
   userId?: number;
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
   cursor?: number;
   limit?: number;
-}
-
-export interface AdminOrderListOptions {
-  page?: number;
-  limit?: number;
-  status?: OrderStatus;
-  query?: string;
 }

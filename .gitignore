@@ -95,3 +95,5 @@ Desktop.ini
 # cypress
 /cypress/videos/
 /cypress/screenshots/
+
+.env

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -16,14 +16,20 @@ import {
   User,
   X,
 } from "lucide-react";
+
 import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
+
+/* =========================================================
+   Types
+========================================================= */
 
 type OrderStatus =
   | "PENDING"
   | "PROCESSING"
   | "SHIPPED"
   | "DELIVERED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "REFUNDED";
 
 type PaymentStatus =
   | "PENDING"
@@ -38,14 +44,33 @@ type Product = {
   price: number | string;
 };
 
+type Payment = {
+  id: number;
+  orderId: number;
+  amount: number | string;
+  authority: string;
+  transactionId: string | null;
+  status: PaymentStatus;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type OrderItem = {
   id: number;
+  orderId: number;
   productId: number;
+
   productTitle: string;
   productPrice: number | string;
   productOffer: number | string;
+
   quantity: number;
   totalPrice: number | string;
+
+  createdAt: string;
+
+  product?: Product | null;
 };
 
 type User = {
@@ -75,6 +100,12 @@ type Order = {
   user?: User | null;
 
   items: OrderItem[];
+
+  /*
+   * مهم:
+   * یک Order می‌تواند چند Payment داشته باشد.
+   */
+  payments: Payment[];
 };
 
 type OrdersResponse = {
@@ -83,12 +114,17 @@ type OrdersResponse = {
   hasNextPage?: boolean;
 };
 
+/* =========================================================
+   Constants
+========================================================= */
+
 const ORDER_STATUSES: OrderStatus[] = [
   "PENDING", 
   "PROCESSING",
   "SHIPPED",
   "DELIVERED",
   "CANCELLED",
+  "REFUNDED",
 ];
 
 const PAYMENT_STATUSES: PaymentStatus[] = [
@@ -107,6 +143,7 @@ const ORDER_STATUS_LABELS: Record<
   SHIPPED: "ارسال شده",
   DELIVERED: "تحویل شده",
   CANCELLED: "لغو شده",
+  REFUNDED: "بازپرداخت شده",
 };
 
 const PAYMENT_STATUS_LABELS: Record<
@@ -119,16 +156,32 @@ const PAYMENT_STATUS_LABELS: Record<
   REFUNDED: "بازگشت وجه",
 };
 
-function formatPrice(value: number | string) {
+/*
+ * چون این صفحه Client Component است،
+ * فعلاً URL درگاه را اینجا می‌سازیم.
+ *
+ * اگر بعداً production شدی، بهتر است این مقدار
+ * از Backend به صورت paymentUrl برگردد.
+ */
+const ZARINPAL_BASE_URL =
+  "https://sandbox.zarinpal.com";
+
+/* =========================================================
+   Helpers
+========================================================= */
+
+function formatPrice(
+  value: number | string
+) {
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
     return "۰";
   }
 
-  return new Intl.NumberFormat("fa-IR").format(
-    number
-  );
+  return new Intl.NumberFormat(
+    "fa-IR"
+  ).format(number);
 }
 
 function formatDate(value?: string) {
@@ -142,13 +195,16 @@ function formatDate(value?: string) {
     return "—";
   }
 
-  return new Intl.DateTimeFormat("fa-IR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "fa-IR",
+    {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  ).format(date);
 }
 
 function getCustomerName(order: Order) {
@@ -172,6 +228,35 @@ function getPaymentStatusLabel(
   return PAYMENT_STATUS_LABELS[status];
 }
 
+/*
+ * ساخت URL پرداخت از authority
+ *
+ * authority:
+ * مثلا:
+ * A000000000000000000000000000000000000000
+ *
+ * خروجی:
+ * https://sandbox.zarinpal.com/pg/StartPay/A000...
+ */
+function getPaymentUrl(
+  authority: string
+) {
+  if (
+    typeof authority !== "string" ||
+    !authority.trim()
+  ) {
+    return null;
+  }
+
+  return `${ZARINPAL_BASE_URL}/pg/StartPay/${encodeURIComponent(
+    authority.trim()
+  )}`;
+}
+
+/* =========================================================
+   Main Page
+========================================================= */
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>(
     []
@@ -193,9 +278,9 @@ export default function AdminOrdersPage() {
   const [
     paymentStatus,
     setPaymentStatus,
-  ] = useState<PaymentStatus | "ALL">(
-    "ALL"
-  );
+  ] = useState<
+    PaymentStatus | "ALL"
+  >("ALL");
 
   const [nextCursor, setNextCursor] =
     useState<number | null>(null);
@@ -218,6 +303,10 @@ export default function AdminOrdersPage() {
   const [refreshing, setRefreshing] =
     useState(false);
 
+  /* =========================================================
+     Load Orders
+  ========================================================= */
+
   async function loadOrders(
     cursor: number | null = null,
     options?: {
@@ -232,7 +321,8 @@ export default function AdminOrdersPage() {
 
       setError("");
 
-      const params = new URLSearchParams();
+      const params =
+        new URLSearchParams();
 
       params.set("limit", "20");
 
@@ -298,7 +388,9 @@ export default function AdminOrdersPage() {
         );
       }
 
-      setOrders(data.orders ?? []);
+      setOrders(
+        data.orders ?? []
+      );
 
       setNextCursor(
         data.nextCursor ?? null
@@ -327,13 +419,25 @@ export default function AdminOrdersPage() {
     }
   }
 
+  /* =========================================================
+     Filters
+  ========================================================= */
+
   useEffect(() => {
     setCurrentPage(1);
     setCursorHistory([null]);
 
     loadOrders(null);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, paymentStatus]);
+  }, [
+    status,
+    paymentStatus,
+  ]);
+
+  /* =========================================================
+     Refresh
+  ========================================================= */
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -350,6 +454,10 @@ export default function AdminOrdersPage() {
       }
     );
   }
+
+  /* =========================================================
+     Open Order
+  ========================================================= */
 
   async function openOrder(
     orderId: number
@@ -412,6 +520,11 @@ export default function AdminOrdersPage() {
       setDetailsLoading(false);
     }
   }
+
+  /* =========================================================
+     Update Order
+  ========================================================= */
+
   async function updateOrder(
     orderId: number,
     data: {
@@ -425,19 +538,21 @@ export default function AdminOrdersPage() {
         {
           method: "PATCH",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify(data),
         }
       );
-  
-      const text = await response.text();
-  
+
+      const text =
+        await response.text();
+
       let result: {
         order?: Order;
         error?: string;
       } = {};
-  
+
       try {
         result = text
           ? JSON.parse(text)
@@ -447,33 +562,58 @@ export default function AdminOrdersPage() {
           "پاسخ سرور معتبر نیست."
         );
       }
-  
+
       if (!response.ok) {
         throw new Error(
           result.error ||
             "به‌روزرسانی سفارش ناموفق بود."
         );
       }
-  
+
       if (!result.order) {
         throw new Error(
           "اطلاعات سفارش از سرور دریافت نشد."
         );
       }
-  
+
+      /*
+       * سفارش موجود در لیست را هم آپدیت می‌کنیم.
+       */
+      setOrders((current) =>
+        current.map((item) =>
+          item.id === orderId
+            ? result.order!
+            : item
+        )
+      );
+
+      /*
+       * Modal هم باید اطلاعات جدید را بگیرد.
+       */
+      setSelectedOrder((current) =>
+        current?.id === orderId
+          ? result.order!
+          : current
+      );
+
       return result.order;
     } catch (error) {
       console.error(error);
-  
+
       alert(
         error instanceof Error
           ? error.message
           : "خطایی رخ داد."
       );
-  
+
       return null;
     }
   }
+
+  /* =========================================================
+     Pagination
+  ========================================================= */
+
   async function handleNextPage() {
     if (
       !hasNextPage ||
@@ -521,6 +661,10 @@ export default function AdminOrdersPage() {
     );
   }
 
+  /* =========================================================
+     Search
+  ========================================================= */
+
   const filteredOrders = useMemo(() => {
     const normalizedSearch =
       search
@@ -560,6 +704,10 @@ export default function AdminOrdersPage() {
     );
   }, [orders, search]);
 
+  /* =========================================================
+     Stats
+  ========================================================= */
+
   const stats = useMemo(() => {
     return {
       total: orders.length,
@@ -584,9 +732,17 @@ export default function AdminOrdersPage() {
     };
   }, [orders]);
 
+  /* =========================================================
+     Loading
+  ========================================================= */
+
   if (loading) {
     return <OrdersSkeleton />;
   }
+
+  /* =========================================================
+     Error
+  ========================================================= */
 
   if (error) {
     return (
@@ -620,12 +776,17 @@ export default function AdminOrdersPage() {
     );
   }
 
+  /* =========================================================
+     Render
+  ========================================================= */
+
   return (
     <main
       dir="rtl"
       className="min-h-screen bg-neutral-50"
     >
       <div className="mx-auto max-w-7xl p-5 sm:p-8">
+
         {/* Header */}
 
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
@@ -689,6 +850,7 @@ export default function AdminOrdersPage() {
 
         <div className="mt-8 rounded-2xl border border-neutral-200 bg-white p-4">
           <div className="flex flex-col gap-3 xl:flex-row">
+
             {/* Search */}
 
             <div className="relative flex-1">
@@ -797,6 +959,7 @@ export default function AdminOrdersPage() {
         {/* Orders */}
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+
           {/* Desktop */}
 
           <div className="hidden overflow-x-auto lg:block">
@@ -896,9 +1059,7 @@ export default function AdminOrdersPage() {
             }
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-neutral-50 px-4 text-xs font-semibold text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <ChevronRight
-              size={15}
-            />
+            <ChevronRight size={15} />
             قبلی
           </button>
 
@@ -920,9 +1081,7 @@ export default function AdminOrdersPage() {
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-black px-4 text-xs font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
             بعدی
-            <ChevronLeft
-              size={15}
-            />
+            <ChevronLeft size={15} />
           </button>
         </div>
       </div>
@@ -955,6 +1114,10 @@ export default function AdminOrdersPage() {
   );
 }
 
+/* =========================================================
+   Stat Card
+========================================================= */
+
 function StatCard({
   title,
   value,
@@ -977,6 +1140,10 @@ function StatCard({
   );
 }
 
+/* =========================================================
+   Desktop Order Row
+========================================================= */
+
 function OrderRow({
   order,
   onOpen,
@@ -986,6 +1153,7 @@ function OrderRow({
 }) {
   return (
     <tr className="border-b border-neutral-100 last:border-0">
+
       <td className="px-6 py-4">
         <div>
           <p className="text-sm font-bold text-black">
@@ -1075,6 +1243,10 @@ function OrderRow({
   );
 }
 
+/* =========================================================
+   Mobile Order Card
+========================================================= */
+
 function OrderMobileCard({
   order,
   onOpen,
@@ -1106,6 +1278,7 @@ function OrderMobileCard({
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
+
         <div className="rounded-xl bg-neutral-50 p-3">
           <p className="text-[10px] text-neutral-400">
             مبلغ
@@ -1173,6 +1346,10 @@ function OrderMobileCard({
   );
 }
 
+/* =========================================================
+   Status Badges
+========================================================= */
+
 function OrderStatusBadge({
   status,
 }: {
@@ -1203,6 +1380,10 @@ function PaymentStatusBadge({
   );
 }
 
+/* =========================================================
+   Order Details Modal
+========================================================= */
+
 function OrderDetailsModal({
   order,
   onClose,
@@ -1218,15 +1399,49 @@ function OrderDetailsModal({
     }
   ) => Promise<Order | null>;
 }) {
-  const [
-    updatingStatus,
-    setUpdatingStatus,
-  ] = useState(false);
+  const [updatingStatus, setUpdatingStatus] =
+    useState(false);
 
-  const [
-    updatingPayment,
-    setUpdatingPayment,
-  ] = useState(false);
+  const [updatingPayment, setUpdatingPayment] =
+    useState(false);
+
+  /*
+   * یک Order ممکن است چند Payment داشته باشد.
+   *
+   * بنابراین بر اساس createdAt،
+   * جدیدترین Payment را پیدا می‌کنیم.
+   */
+  const latestPayment =
+    order.payments?.length
+      ? [...order.payments].sort(
+          (a, b) =>
+            new Date(
+              b.createdAt
+            ).getTime() -
+            new Date(
+              a.createdAt
+            ).getTime()
+        )[0]
+      : null;
+
+  /*
+   * فقط Paymentهای Pending قابل باز کردن هستند.
+   */
+  const paymentUrl =
+    latestPayment?.status ===
+      "PENDING" &&
+    latestPayment.authority
+      ? getPaymentUrl(
+          latestPayment.authority
+        )
+      : null;
+
+  const canOpenPayment =
+    !!paymentUrl;
+
+  /* =========================================================
+     Change Order Status
+  ========================================================= */
 
   async function changeStatus(
     status: OrderStatus
@@ -1238,16 +1453,17 @@ function OrderDetailsModal({
     try {
       setUpdatingStatus(true);
 
-      await onUpdate(
-        order.id,
-        {
-          status,
-        }
-      );
+      await onUpdate(order.id, {
+        status,
+      });
     } finally {
       setUpdatingStatus(false);
     }
   }
+
+  /* =========================================================
+     Change Payment Status
+  ========================================================= */
 
   async function changePaymentStatus(
     paymentStatus: PaymentStatus
@@ -1262,12 +1478,9 @@ function OrderDetailsModal({
     try {
       setUpdatingPayment(true);
 
-      await onUpdate(
-        order.id,
-        {
-          paymentStatus,
-        }
-      );
+      await onUpdate(order.id, {
+        paymentStatus,
+      });
     } finally {
       setUpdatingPayment(false);
     }
@@ -1275,13 +1488,16 @@ function OrderDetailsModal({
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+
       <div
         dir="rtl"
         className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
       >
+
         {/* Header */}
 
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-100 bg-white p-5 sm:p-6">
+
           <div>
             <p className="text-xs font-semibold text-neutral-400">
               ORDER DETAILS
@@ -1301,10 +1517,14 @@ function OrderDetailsModal({
           >
             <X size={17} />
           </button>
+
         </div>
 
         <div className="space-y-6 p-5 sm:p-6">
-          {/* Customer */}
+
+          {/* =================================================
+              Customer
+          ================================================= */}
 
           <section>
             <SectionTitle>
@@ -1312,6 +1532,7 @@ function OrderDetailsModal({
             </SectionTitle>
 
             <div className="grid gap-3 sm:grid-cols-2">
+
               <InfoBox
                 label="نام"
                 value={getCustomerName(
@@ -1352,10 +1573,13 @@ function OrderDetailsModal({
                   }
                 />
               </div>
+
             </div>
           </section>
 
-          {/* Status */}
+          {/* =================================================
+              Status
+          ================================================= */}
 
           <section>
             <SectionTitle>
@@ -1363,12 +1587,17 @@ function OrderDetailsModal({
             </SectionTitle>
 
             <div className="grid gap-4 sm:grid-cols-2">
+
+              {/* Order Status */}
+
               <div className="rounded-2xl border border-neutral-200 p-4">
+
                 <p className="text-xs font-semibold text-neutral-400">
                   وضعیت سفارش
                 </p>
 
                 <div className="relative mt-3">
+
                   <select
                     value={order.status}
                     disabled={
@@ -1409,15 +1638,20 @@ function OrderDetailsModal({
                       className="absolute left-9 top-1/2 -translate-y-1/2 animate-spin"
                     />
                   )}
+
                 </div>
               </div>
 
+              {/* Payment Status */}
+
               <div className="rounded-2xl border border-neutral-200 p-4">
+
                 <p className="text-xs font-semibold text-neutral-400">
                   وضعیت پرداخت
                 </p>
 
                 <div className="relative mt-3">
+
                   <select
                     value={
                       order.paymentStatus
@@ -1460,12 +1694,16 @@ function OrderDetailsModal({
                       className="absolute left-9 top-1/2 -translate-y-1/2 animate-spin"
                     />
                   )}
+
                 </div>
               </div>
+
             </div>
           </section>
 
-          {/* Payment Demo */}
+          {/* =================================================
+              Payment
+          ================================================= */}
 
           <section>
             <SectionTitle>
@@ -1473,112 +1711,434 @@ function OrderDetailsModal({
             </SectionTitle>
 
             <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 p-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+              {/* =========================
+                  PAID
+              ========================= */}
+
+              {latestPayment?.status ===
+              "PAID" ? (
+
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                  <div>
+
+                    <div className="flex items-center gap-2">
+
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100">
+                        <CheckCircle2
+                          size={16}
+                          className="text-green-600"
+                        />
+                      </div>
+
+                      <p className="text-sm font-bold text-green-700">
+                        پرداخت موفق
+                      </p>
+
+                    </div>
+
+                    {latestPayment.transactionId && (
+                      <p className="mt-2 text-xs text-neutral-400">
+                        شناسه تراکنش:{" "}
+                        <span className="font-semibold text-neutral-600">
+                          {
+                            latestPayment.transactionId
+                          }
+                        </span>
+                      </p>
+                    )}
+
+                    {latestPayment.authority && (
+                      <p className="mt-1 text-xs text-neutral-400">
+                        Authority:{" "}
+                        <span className="font-mono text-[11px] text-neutral-500">
+                          {
+                            latestPayment.authority
+                          }
+                        </span>
+                      </p>
+                    )}
+
+                  </div>
+
+                  <div className="text-left">
+
+                    <p className="text-xs text-neutral-400">
+                      مبلغ پرداخت شده
+                    </p>
+
+                    <p className="mt-1 text-sm font-bold text-black">
+                      {formatPrice(
+                        latestPayment.amount
+                      )}{" "}
+                      تومان
+                    </p>
+
+                    {latestPayment.paidAt && (
+                      <p className="mt-1 text-[11px] text-neutral-400">
+                        {formatDate(
+                          latestPayment.paidAt
+                        )}
+                      </p>
+                    )}
+
+                  </div>
+
+                </div>
+
+              /* =========================
+                  PENDING
+              ========================= */
+
+              ) : latestPayment?.status ===
+                "PENDING" ? (
+
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                  <div>
+
+                    <p className="text-sm font-bold text-black">
+                      پرداخت در انتظار
+                    </p>
+
+                    <p className="mt-1 text-xs leading-6 text-neutral-400">
+                      این پرداخت هنوز تکمیل
+                      نشده است. می‌توانید
+                      لینک درگاه را باز کنید.
+                    </p>
+
+                    {latestPayment.authority && (
+                      <p className="mt-2 break-all font-mono text-[10px] text-neutral-400">
+                        Authority:{" "}
+                        {
+                          latestPayment.authority
+                        }
+                      </p>
+                    )}
+
+                  </div>
+
+                  {canOpenPayment ? (
+
+                    <a
+                      href={paymentUrl!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-black px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-neutral-800"
+                    >
+                      <ExternalLink
+                        size={14}
+                      />
+
+                      مشاهده لینک پرداخت
+                    </a>
+
+                  ) : (
+
+                    <span className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-white px-4 text-xs font-semibold text-neutral-400 shadow-sm">
+                      لینک پرداخت موجود نیست
+                    </span>
+
+                  )}
+
+                </div>
+
+              /* =========================
+                  FAILED
+              ========================= */
+
+              ) : latestPayment?.status ===
+                "FAILED" ? (
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                  <div>
+
+                    <p className="text-sm font-bold text-red-600">
+                      پرداخت ناموفق
+                    </p>
+
+                    <p className="mt-1 text-xs leading-6 text-neutral-400">
+                      این تلاش پرداخت ناموفق
+                      بوده و قابل استفاده
+                      مجدد نیست. برای
+                      پرداخت مجدد باید یک
+                      تلاش پرداخت جدید
+                      ایجاد شود.
+                    </p>
+
+                  </div>
+
+                  <span className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-red-50 px-4 text-xs font-semibold text-red-500">
+                    پرداخت ناموفق
+                  </span>
+
+                </div>
+
+              /* =========================
+                  REFUNDED
+              ========================= */
+
+              ) : latestPayment?.status ===
+                "REFUNDED" ? (
+
                 <div>
-                  <p className="text-sm font-bold text-black">
-                    لینک پرداخت
+
+                  <p className="text-sm font-bold text-neutral-700">
+                    پرداخت بازپرداخت شده
                   </p>
 
                   <p className="mt-1 text-xs leading-6 text-neutral-400">
-                    درگاه واقعی هنوز متصل نشده است.
-                    این بخش برای نمایش نمونه‌کار آماده شده.
+                    مبلغ این پرداخت
+                    بازپرداخت شده است.
                   </p>
+
                 </div>
 
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-xs font-semibold text-neutral-400 shadow-sm"
-                >
-                  <ExternalLink
-                    size={14}
-                  />
-                  مشاهده لینک پرداخت
-                </button>
-              </div>
+              /* =========================
+                  NO PAYMENT
+              ========================= */
+
+              ) : (
+
+                <div>
+
+                  <p className="text-sm font-bold text-black">
+                    پرداختی ثبت نشده است
+                  </p>
+
+                  <p className="mt-1 text-xs leading-6 text-neutral-400">
+                    هنوز هیچ تلاش پرداختی
+                    برای این سفارش ثبت
+                    نشده است.
+                  </p>
+
+                </div>
+              )}
+
             </div>
           </section>
 
-          {/* Items */}
+          {/* =================================================
+              Items
+          ================================================= */}
 
           <section>
+
             <SectionTitle>
               کالاهای سفارش
             </SectionTitle>
 
             <div className="overflow-hidden rounded-2xl border border-neutral-200">
+
               <div className="divide-y divide-neutral-100">
-              {order.items?.map((item) => {
-                const unitPrice = Number(
-                  item.productPrice
-                );
-              
-                const offer = Number(
-                  item.productOffer
-                );
-              
-                const totalPrice = Number(
-                  item.totalPrice
-                );
-              
-                return (
-                  <div
-                    key={item.id}
-                    className="flex gap-4 p-4"
-                  >
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-neutral-100">
-                      <Package
-                        size={18}
-                        className="text-neutral-300"
-                      />
-                      {/* <img
-                      src={normalizeImageUrl()}
-                      alt={"عکس محصول"}
-                        className="h-full w-full object-contain"
-                        /> */}
-                    </div>
-              
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-black">
-                        {item.productTitle}
-                      </p>
-              
-                      <div className="mt-2 flex flex-wrap gap-3 text-xs text-neutral-400">
-                        <span>
-                          تعداد:{" "}
-                          {new Intl.NumberFormat(
-                            "fa-IR"
-                          ).format(item.quantity)}
-                        </span>
-              
-                        <span>
-                          قیمت واحد:{" "}
-                          {formatPrice(unitPrice)}{" "}
-                          تومان
-                        </span>
-              
-                        {offer > 0 && (
-                          <span>
-                            تخفیف:{" "}
-                            {formatPrice(offer)}٪
-                          </span>
-                        )}
+
+                {order.items?.map(
+                  (item) => {
+
+                    const originalPrice =
+                      Number(
+                        item.productPrice
+                      );
+
+                    const offer =
+                      Number(
+                        item.productOffer
+                      );
+
+                    const quantity =
+                      Number(
+                        item.quantity
+                      );
+
+                    const discountedUnitPrice =
+                      originalPrice *
+                      (1 -
+                        offer / 100);
+
+                    const totalDiscount =
+                      originalPrice *
+                      (offer / 100) *
+                      quantity;
+
+                    const hasDiscount =
+                      Number.isFinite(
+                        offer
+                      ) &&
+                      offer > 0;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex gap-4 p-4"
+                      >
+
+                        {/* Product Image */}
+
+                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
+
+                          {item.product?.images?.[0] ? (
+
+                            <img
+                              src={normalizeImageUrl(
+                                item
+                                  .product
+                                  .images[0]
+                              )}
+                              alt={
+                                item
+                                  .product
+                                  .title ||
+                                item.productTitle
+                              }
+                              className="h-full w-full object-contain"
+                            />
+
+                          ) : (
+
+                            <div className="flex h-full w-full items-center justify-center">
+                              <Package
+                                size={18}
+                                className="text-neutral-300"
+                              />
+                            </div>
+
+                          )}
+
+                        </div>
+
+                        {/* Product Info */}
+
+                        <div className="min-w-0 flex-1">
+
+                          <p className="truncate text-sm font-bold text-black">
+                            {item.product?.title ||
+                              item.productTitle}
+                          </p>
+
+                          {/* Quantity + Price */}
+
+                          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+
+                            <span className="text-neutral-400">
+                              تعداد:{" "}
+                              {new Intl.NumberFormat(
+                                "fa-IR"
+                              ).format(
+                                quantity
+                              )}
+                            </span>
+
+                            <span className="text-neutral-400">
+                              قیمت واحد:
+                            </span>
+
+                            {hasDiscount ? (
+                              <>
+                                <span className="text-neutral-400 line-through">
+                                  {formatPrice(
+                                    originalPrice
+                                  )}{" "}
+                                  تومان
+                                </span>
+
+                                <span className="rounded-lg bg-red-50 px-2 py-1 font-semibold text-red-500">
+                                  {new Intl.NumberFormat(
+                                    "fa-IR"
+                                  ).format(
+                                    offer
+                                  )}
+                                  ٪ تخفیف
+                                </span>
+                              </>
+                            ) : (
+                              <span className="font-medium text-neutral-500">
+                                {formatPrice(
+                                  originalPrice
+                                )}{" "}
+                                تومان
+                              </span>
+                            )}
+
+                          </div>
+
+                          {/* Discount Details */}
+
+                          {hasDiscount && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+
+                              <span className="text-xs text-neutral-400">
+                                قیمت بعد از تخفیف:
+                              </span>
+
+                              <span className="text-xs font-bold text-black">
+                                {formatPrice(
+                                  discountedUnitPrice
+                                )}{" "}
+                                تومان
+                              </span>
+
+                              <span className="mx-1 h-1 w-1 rounded-full bg-neutral-300" />
+
+                              <span className="text-xs text-neutral-400">
+                                مبلغ تخفیف:
+                              </span>
+
+                              <span className="text-xs font-semibold text-red-500">
+                                {formatPrice(
+                                  totalDiscount
+                                )}{" "}
+                                تومان
+                              </span>
+
+                            </div>
+                          )}
+
+                        </div>
+
+                        {/* Final Item Price */}
+
+                        <div className="shrink-0 text-left">
+
+                          {hasDiscount && (
+                            <p className="mb-1 text-xs text-neutral-400 line-through">
+                              {formatPrice(
+                                originalPrice *
+                                  quantity
+                              )}{" "}
+                              تومان
+                            </p>
+                          )}
+
+                          <p className="text-sm font-bold text-black">
+                            {formatPrice(
+                              item.totalPrice
+                            )}{" "}
+                            تومان
+                          </p>
+
+                          {hasDiscount && (
+                            <p className="mt-1 text-[11px] font-medium text-red-500">
+                              با تخفیف
+                            </p>
+                          )}
+
+                        </div>
+
                       </div>
-                    </div>
-              
-                    <div className="shrink-0 text-left">
-                      <p className="text-sm font-bold text-black">
-                        {formatPrice(totalPrice)}{" "}
-                        تومان
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  }
+                )}
+
               </div>
 
+              {/* Final Total */}
+
               <div className="border-t border-neutral-100 bg-neutral-50 p-4">
+
                 <div className="flex items-center justify-between">
+
                   <span className="text-sm font-semibold text-neutral-500">
                     مبلغ نهایی
                   </span>
@@ -1589,26 +2149,38 @@ function OrderDetailsModal({
                     )}{" "}
                     تومان
                   </span>
+
                 </div>
+
               </div>
+
             </div>
           </section>
 
-          {/* Bottom */}
+          {/* =================================================
+              Bottom
+          ================================================= */}
 
           <div className="flex justify-end">
+
             <button
               onClick={onClose}
               className="h-11 rounded-xl bg-black px-6 text-sm font-semibold text-white transition hover:bg-neutral-800"
             >
               بستن
             </button>
+
           </div>
+
         </div>
       </div>
     </div>
   );
 }
+
+/* =========================================================
+   Section Title
+========================================================= */
 
 function SectionTitle({
   children,
@@ -1624,6 +2196,10 @@ function SectionTitle({
   );
 }
 
+/* =========================================================
+   Info Box
+========================================================= */
+
 function InfoBox({
   label,
   value,
@@ -1633,6 +2209,7 @@ function InfoBox({
 }) {
   return (
     <div className="rounded-2xl bg-neutral-50 p-4">
+
       <p className="text-[10px] font-medium text-neutral-400">
         {label}
       </p>
@@ -1640,9 +2217,14 @@ function InfoBox({
       <p className="mt-1 text-sm font-semibold leading-6 text-black">
         {value}
       </p>
+
     </div>
   );
 }
+
+/* =========================================================
+   Skeleton
+========================================================= */
 
 function OrdersSkeleton() {
   return (
@@ -1651,9 +2233,11 @@ function OrdersSkeleton() {
       className="min-h-screen bg-neutral-50"
     >
       <div className="mx-auto max-w-7xl p-5 sm:p-8">
+
         <div className="h-10 w-48 animate-pulse rounded-xl bg-neutral-200" />
 
         <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+
           {Array.from({
             length: 4,
           }).map((_, index) => (
@@ -1662,11 +2246,13 @@ function OrdersSkeleton() {
               className="h-28 animate-pulse rounded-2xl bg-neutral-200"
             />
           ))}
+
         </div>
 
         <div className="mt-8 h-20 animate-pulse rounded-2xl bg-neutral-200" />
 
         <div className="mt-5 overflow-hidden rounded-2xl bg-white">
+
           {Array.from({
             length: 7,
           }).map((_, index) => (
@@ -1675,7 +2261,9 @@ function OrdersSkeleton() {
               className="h-24 animate-pulse border-b border-neutral-100 bg-neutral-100"
             />
           ))}
+
         </div>
+
       </div>
     </main>
   );

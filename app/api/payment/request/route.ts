@@ -3,7 +3,9 @@ import {
   NextResponse,
 } from "next/server";
 
-import { getCurrentUser } from "@/app/lib/auth/current-user";
+import {
+  getCurrentUser,
+} from "@/app/lib/auth/current-user";
 
 import {
   requestPaymentForUser,
@@ -48,29 +50,10 @@ export async function POST(
       );
     }
 
-    const callbackUrl =
-      typeof body.callbackUrl ===
-      "string"
-        ? body.callbackUrl
-        : "";
-
-    if (!callbackUrl) {
-      return NextResponse.json(
-        {
-          error:
-            "Callback URL is required",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
     const result =
       await requestPaymentForUser(
         user.id,
-        orderId,
-        callbackUrl
+        orderId
       );
 
     return NextResponse.json(
