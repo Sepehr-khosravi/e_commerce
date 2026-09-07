@@ -119,7 +119,7 @@ type OrdersResponse = {
 ========================================================= */
 
 const ORDER_STATUSES: OrderStatus[] = [
-  "PENDING",
+  "PENDING", 
   "PROCESSING",
   "SHIPPED",
   "DELIVERED",
@@ -1203,6 +1203,7 @@ function OrderRow({
           {formatPrice(
             order.totalPrice
           )}{" "}
+
           تومان
         </p>
       </td>

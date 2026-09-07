@@ -221,7 +221,7 @@ model Order {
   phone     String
   address   String
 
-  totalPrice Decimal @db.Decimal(12, 2)
+  totalPrice Float
 
   status        OrderStatus   @default(PENDING)
   paymentStatus PaymentStatus @default(PENDING)
@@ -232,6 +232,10 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// =========================
+// ORDER ITEMS
+// =========================
 
 model OrderItem {
   id Int @id @default(autoincrement())
@@ -279,6 +283,7 @@ model Payment {
   @@index([orderId])
   @@index([status])
 }
+
 
 model Banner {
   id        Int      @id @default(autoincrement())

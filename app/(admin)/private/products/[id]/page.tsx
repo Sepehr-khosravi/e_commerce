@@ -12,6 +12,7 @@ import {
   X,
   GripVertical,
 } from "lucide-react";
+import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
 
 type Product = {
   id: number;
@@ -1192,8 +1193,8 @@ export default function EditProductPage({
                       <img
                         src={
                           image.isNew
-                            ? image.preview
-                            : image.url
+                            ? ( image.preview ? normalizeImageUrl(image.preview) : "" )
+                            : normalizeImageUrl(image.url)
                         }
                         alt={`${title} - ${index + 1}`}
                         className="h-full w-full object-contain"
