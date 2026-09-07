@@ -16,126 +16,69 @@ type Props = {
 };
 
 function formatPrice(value: number) {
-  return new Intl.NumberFormat("fa-IR").format(
-    value
-  );
+  return new Intl.NumberFormat("fa-IR").format(value);
 }
 
-export default function CartSummary({
-  items,
-}: Props) {
-  const originalTotal = items.reduce(
-    (total, item) =>
-      total +
-      Number(item.product.price) *
-        item.quantity,
-    0
-  );
+export default function CartSummary({ items }: Props) {
+  // قیمت کل بدون تخفیف
+  const originalTotal = items.reduce((total, item) => {
+    const price = Number(item.product.price) || 0;
+    return total + price * item.quantity;
+  }, 0);
 
-  const finalTotal = items.reduce(
-    (total, item) => {
-      const price = Number(
-        item.product.price
-      );
+  // قیمت کل با تخفیف درصدی (فرمول صحیح)
+  const finalTotal = items.reduce((total, item) => {
+    const price = Number(item.product.price) || 0;
+    const offer = Number(item.product.offer) || 0; // تبدیل به عدد (اگر null یا undefined بود، 0 می‌شود)
 
-      const offer =
-        item.product.offer !== null &&
-        item.product.offer !== undefined
-          ? Number(item.product.offer)
-          : null;
+    // اگر تخفیف معتبر (بیشتر از 0 و کمتر از 100) باشد:
+    const discountAmount = offer > 0 && offer <= 100 ? (price * offer) / 100 : 0;
+    const finalPrice = price - discountAmount;
 
-      const finalPrice =
-        offer !== null && offer > 0
-          ? offer
-          : price;
+    return total + finalPrice * item.quantity;
+  }, 0);
 
-      return (
-        total +
-        finalPrice * item.quantity
-      );
-    },
-    0
-  );
-
-  const discount =
-    originalTotal - finalTotal;
+  // مبلغ کل تخفیف
+  const discount = originalTotal - finalTotal;
 
   return (
     <aside className="sticky top-6 rounded-3xl bg-neutral-50 p-5 sm:p-6">
-
       <div className="mb-6">
-
         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
           Order Summary
         </span>
-
-        <h2 className="mt-2 text-lg font-bold text-black">
-          خلاصه سفارش
-        </h2>
-
+        <h2 className="mt-2 text-lg font-bold text-black">خلاصه سفارش</h2>
       </div>
 
-
       <div className="space-y-4 text-xs">
-
         <div className="flex items-center justify-between">
-
-          <span className="text-neutral-500">
-            قیمت محصولات
-          </span>
-
+          <span className="text-neutral-500">قیمت محصولات</span>
           <span className="font-semibold text-black">
-            {formatPrice(
-              originalTotal
-            )}{" "}
-            تومان
+            {formatPrice(originalTotal)} تومان
           </span>
-
         </div>
-
 
         {discount > 0 && (
           <div className="flex items-center justify-between">
-
-            <span className="text-neutral-500">
-              تخفیف
-            </span>
-
+            <span className="text-neutral-500">تخفیف</span>
             <span className="font-semibold text-black">
-              −{" "}
-              {formatPrice(discount)}{" "}
-              تومان
+              − {formatPrice(discount)} تومان
             </span>
-
           </div>
         )}
-
       </div>
-
 
       <div className="my-6 h-px bg-neutral-200" />
 
-
       <div className="flex items-end justify-between">
-
-        <span className="text-xs font-medium text-neutral-500">
-          مبلغ نهایی
-        </span>
-
+        <span className="text-xs font-medium text-neutral-500">مبلغ نهایی</span>
         <div className="text-left">
-
           <p className="text-xl font-bold tracking-tight text-black">
             {formatPrice(finalTotal)}
           </p>
-
-          <p className="mt-1 text-[9px] text-neutral-400">
-            تومان
-          </p>
-
+          <p className="mt-1 text-[9px] text-neutral-400">تومان</p>
         </div>
-
       </div>
-
 
       <Link
         href="/checkout"
@@ -145,14 +88,12 @@ export default function CartSummary({
         <ArrowLeft size={15} />
       </Link>
 
-
       <Link
         href="/products"
         className="mt-3 flex h-11 items-center justify-center rounded-xl text-xs font-semibold text-neutral-500 transition hover:bg-white hover:text-black"
       >
         ادامه خرید
       </Link>
-
     </aside>
   );
 }

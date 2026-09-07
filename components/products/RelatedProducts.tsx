@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Package,
 } from "lucide-react";
+import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
 
 type Product = {
   id: number;
@@ -236,7 +237,7 @@ export default function RelatedProducts({
                     {product.images?.length > 0 ? (
                       <img
                         src={
-                          product.images[0]
+                          normalizeImageUrl(product.images[0])
                         }
                         alt={
                           product.title

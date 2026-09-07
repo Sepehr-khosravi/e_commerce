@@ -1936,7 +1936,7 @@ function CreateProductModal({
                       className="group relative aspect-square overflow-hidden rounded-2xl bg-neutral-100"
                     >
                       <img
-                        src={normalizeImageUrl(image.preview)}
+                        src={image.preview}
                         alt={`تصویر ${
                           index + 1
                         }`}

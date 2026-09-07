@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import CategorySkeleton from "./CategorySkeleton";
+import { 
+  ChevronLeft, 
+  LayoutGrid
+} from "lucide-react";
 
 type Category = {
   id: number;
@@ -14,7 +18,6 @@ export default function CategorySection() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("all");
-
   const categoriesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,11 +32,7 @@ export default function CategorySection() {
         }
 
         const data = await response.json();
-
-        const result = Array.isArray(data)
-          ? data
-          : data.categories ?? [];
-
+        const result = Array.isArray(data) ? data : data.categories ?? [];
         setCategories(result);
       } catch (error) {
         console.error("Category fetch error:", error);
@@ -46,99 +45,15 @@ export default function CategorySection() {
   }, []);
 
   return (
-    <section
-      id="categories"
-      className="
-        mx-auto
-        w-full
-        max-w-7xl
-        px-3
-        py-8
-        sm:px-5
-        sm:py-10
-        md:px-6
-        md:py-12
-        lg:px-8
-        lg:py-16
-      "
-    >
+    <section className="w-full max-w-7xl mx-auto px-4 py-8 md:py-12 lg:py-16">
       {/* Header */}
-      <div
-        className="
-          mb-5
-          flex
-          items-end
-          justify-between
-          gap-4
-          sm:mb-7
-          md:mb-8
-        "
-      >
-        <div className="text-right">
-          <span
-            className="
-              text-[9px]
-              font-bold
-              uppercase
-              tracking-[0.2em]
-              text-neutral-400
-              sm:text-[10px]
-              sm:tracking-[0.25em]
-            "
-          >
-            Categories
+      <div className="flex items-center justify-center mb-6 md:mb-8">
+        <div className="flex items-center gap-2">
+          <LayoutGrid className="w-4 h-4 text-neutral-300" />
+          <span className="text-xs font-medium text-neutral-400 tracking-wider">
+            دسته‌بندی
           </span>
-
-          <h2
-            className="
-              mt-1.5
-              text-lg
-              font-bold
-              tracking-tight
-              text-black
-              sm:mt-2
-              sm:text-2xl
-              md:text-3xl
-            "
-          >
-            دسته‌بندی محصولات
-          </h2>
-
-          <p
-            className="
-              mt-1.5
-              max-w-xl
-              text-[11px]
-              leading-5
-              text-neutral-500
-              sm:mt-2
-              sm:text-xs
-              md:text-sm
-              md:leading-6
-            "
-          >
-            محصولات مورد نظرتان را سریع‌تر پیدا کنید.
-          </p>
         </div>
-
-        {/* All products */}
-        <Link
-          href="/products"
-          onClick={() => setActiveCategory("all")}
-          className="
-            shrink-0
-            text-[10px]
-            font-semibold
-            text-neutral-500
-            transition-colors
-            hover:text-black
-            sm:text-xs
-            md:text-sm
-          "
-        >
-          مشاهده همه
-          <span className="mr-1">←</span>
-        </Link>
       </div>
 
       {/* Content */}
@@ -149,145 +64,108 @@ export default function CategorySection() {
           ref={categoriesRef}
           dir="rtl"
           className="
-            -mx-3
-            flex
-            gap-2
-            overflow-x-auto
-            px-3
-            pb-2
+            flex flex-nowrap items-start 
+            justify-start md:justify-center 
+            gap-6 sm:gap-10 md:gap-15
+            overflow-x-auto pb-4
             scrollbar-none
-            sm:-mx-5
-            sm:gap-2.5
-            sm:px-5
-            md:mx-0
-            md:flex-wrap
-            md:justify-start
-            md:overflow-visible
-            md:px-0
-            md:pb-0
+            -mx-4 px-4
+            md:mx-0 md:px-0
           "
           style={{
             scrollbarWidth: "none",
             msOverflowStyle: "none",
+            WebkitOverflowScrolling: "touch",
           }}
         >
-          {/* All */}
+          {/* آیتم همه محصولات (اولین آیتم از راست) */}
           <Link
             href="/products"
             onClick={() => setActiveCategory("all")}
-            className={`
-              group
-              flex
-              h-10
-              shrink-0
-              items-center
-              gap-2
-              rounded-xl
-              px-4
-              text-[11px]
-              font-bold
-              transition-all
-              duration-200
-              sm:h-11
-              sm:px-5
-              sm:text-xs
-              md:h-12
-              md:rounded-2xl
-              md:px-6
-              md:text-sm
-              ${
-                activeCategory === "all"
-                  ? "bg-black text-white shadow-sm"
-                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-black"
-              }
-            `}
+            className="group flex flex-col items-center justify-center shrink-0 gap-2"
           >
-            <span
+            <div
               className={`
-                flex
-                h-5
-                w-5
-                items-center
-                justify-center
-                rounded-md
-                text-[9px]
-                transition-colors
-                sm:h-6
-                sm:w-6
-                sm:text-[10px]
+                w-15 h-15 sm:w-15 sm:h-15 rounded-full border flex items-center justify-center bg-white
+                transition-all duration-300
                 ${
                   activeCategory === "all"
-                    ? "bg-white/15 text-white"
-                    : "bg-white text-neutral-500"
+                    ? "border-neutral-900 shadow-lg shadow-neutral-200"
+                    : "border-neutral-200 hover:border-neutral-400 group-hover:shadow-md"
                 }
               `}
             >
-              ✦
+              <LayoutGrid
+                className={`
+                  w-7 h-7 sm:w-8 sm:h-8 transition-all duration-300
+                  ${activeCategory === "all" ? "text-neutral-900" : "text-neutral-500 group-hover:text-neutral-900"}
+                `}
+                strokeWidth={1.5}
+              />
+            </div>
+            <span className="text-[11px] sm:text-xs font-medium text-center leading-tight">
+              همه محصولات
             </span>
-
-            همه محصولات
           </Link>
 
-          {/* Categories */}
+          {/* دسته‌بندی‌های دیگر */}
           {categories.map((category) => {
-            const isActive =
-              activeCategory === category.slug;
+            const isActive = activeCategory === category.slug;
 
             return (
               <Link
                 key={category.id}
-                href={`/products?category=${encodeURIComponent(
-                  category.slug
-                )}`}
-                onClick={() =>
-                  setActiveCategory(category.slug)
-                }
-                className={`
-                  group
-                  flex
-                  h-10
-                  shrink-0
-                  items-center
-                  gap-2
-                  rounded-xl
-                  px-4
-                  text-[11px]
-                  font-semibold
-                  transition-all
-                  duration-200
-                  sm:h-11
-                  sm:px-5
-                  sm:text-xs
-                  md:h-12
-                  md:rounded-2xl
-                  md:px-6
-                  md:text-sm
-                  ${
-                    isActive
-                      ? "bg-black text-white shadow-sm"
-                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-black"
-                  }
-                `}
+                href={`/products?category=${encodeURIComponent(category.slug)}`}
+                onClick={() => setActiveCategory(category.slug)}
+                className="group flex flex-col items-center justify-center shrink-0 gap-2"
               >
-                <span
+                <div
                   className={`
-                    h-1.5
-                    w-1.5
-                    rounded-full
-                    transition-all
-                    duration-200
+                    w-15 h-15 sm:w-15 sm:h-15 
+                    rounded-full border flex items-center justify-center bg-white
+                    transition-all duration-300
                     ${
                       isActive
-                        ? "bg-white"
-                        : "bg-neutral-400 group-hover:bg-black"
+                        ? "border-neutral-900 shadow-lg shadow-neutral-200"
+                        : "border-neutral-200 hover:border-neutral-400 group-hover:shadow-md"
                     }
                   `}
-                />
+                >
+                  <LayoutGrid 
+                    className={`
+                      w-7 h-7 sm:w-8 sm:h-8
+                      transition-all duration-300
+                      ${isActive ? "text-neutral-900" : "text-neutral-500 group-hover:text-neutral-900"}
+                    `}
+                    strokeWidth={1.5}
+                  />
+                </div>
 
-                {category.name}
+                <span
+                  className={`
+                    text-[11px] sm:text-xs font-medium text-center leading-tight max-w-[80px]
+                    ${isActive ? "text-neutral-900" : "text-neutral-600 group-hover:text-neutral-900"}
+                  `}
+                >
+                  {category.name}
+                </span>
               </Link>
             );
           })}
+
+          {/* دکمه مشاهده بیشتر (آخرین آیتم - سمت چپ) */}
+          <Link
+            href="/products"
+            onClick={() => setActiveCategory("all")}
+            className="group flex flex-col items-center justify-center shrink-0 gap-2"
+          >
+            <div className="w-15 h-15 sm:w-15 sm:h-15 rounded-full border border-neutral-200 flex items-center justify-center bg-white transition-all duration-300 hover:border-neutral-400 group-hover:shadow-md">
+              <ChevronLeft className="w-7 h-7 text-neutral-500 group-hover:text-black transition-colors" />
+            </div>
+            <span className="text-[11px] sm:text-xs font-medium text-neutral-600 text-center">
+              مشاهده بیشتر
+            </span>
+          </Link>
         </div>
       )}
     </section>
