@@ -144,6 +144,10 @@ export async function getDashboardStats() {
   };
 }
 
+/* =========================================================
+   REVENUE
+========================================================= */
+
 async function getRevenue(options?: {
   from?: Date;
   to?: Date;
@@ -152,17 +156,16 @@ async function getRevenue(options?: {
     where: {
       paymentStatus: "PAID",
 
-      ...(options?.from ||
-      options?.to
+      ...(options?.from || options?.to
         ? {
             createdAt: {
-              ...(options?.from
+              ...(options.from
                 ? {
                     gte: options.from,
                   }
                 : {}),
 
-              ...(options?.to
+              ...(options.to
                 ? {
                     lte: options.to,
                   }
@@ -179,10 +182,14 @@ async function getRevenue(options?: {
 
   return orders.reduce(
     (total, order) =>
-      total + order.totalPrice,
+      total + Number(order.totalPrice),
     0
   );
 }
+
+/* =========================================================
+   RECENT ORDERS
+========================================================= */
 
 export async function getRecentOrders(
   limit = 10
@@ -219,6 +226,10 @@ export async function getRecentOrders(
   });
 }
 
+/* =========================================================
+   POPULAR PRODUCTS
+========================================================= */
+
 export async function getPopularProducts(
   limit = 10
 ) {
@@ -238,6 +249,10 @@ export async function getPopularProducts(
     },
   });
 }
+
+/* =========================================================
+   REVENUE HISTORY
+========================================================= */
 
 export async function getRevenueHistory(
   days = 30
@@ -302,7 +317,7 @@ export async function getRevenueHistory(
       };
 
     current.revenue +=
-      order.totalPrice;
+      Number(order.totalPrice);
 
     current.orders += 1;
 

@@ -13,8 +13,8 @@ export default function HomePage() {
       <main>
         <HeroSection />
         <CategorySection />
-        <Features />
         <PopularProducts />
+        <Features />
         {/* <ProductSection /> */}
         <CategoryProductsSection />
       </main>

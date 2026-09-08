@@ -1,7 +1,10 @@
-import { Decimal } from "@prisma/client/runtime/client";
 import { prisma } from "../prisma";
 
 import type { CheckoutData } from "./checkout.types";
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
 export async function checkout(
   userId: number,
@@ -11,31 +14,33 @@ export async function checkout(
     throw new Error("Invalid user ID");
   }
 
-  if (!data.firstName.trim()) {
+  const firstName = data.firstName.trim();
+  const lastName = data.lastName.trim();
+  const phone = data.phone.trim();
+  const address = data.address.trim();
+
+  if (!firstName) {
     throw new Error("First name is required");
   }
 
-  if (!data.lastName.trim()) {
+  if (!lastName) {
     throw new Error("Last name is required");
   }
 
-  if (!data.phone.trim()) {
+  if (!phone) {
     throw new Error("Phone number is required");
   }
 
-  if (!data.address.trim()) {
+  if (!address) {
     throw new Error("Address is required");
   }
 
   return prisma.$transaction(async (tx) => {
     /*
-     * IMPORTANT:
-     *
-     * The cart should be read inside the transaction.
-     * We will connect this to your existing Cart/CartItem
-     * schema rather than trusting anything from the client.
+     * Always read the cart from the database.
+     * Never trust product prices, offers or quantities
+     * coming from the client.
      */
-
     const cart = await tx.cart.findUnique({
       where: {
         userId,
@@ -60,8 +65,23 @@ export async function checkout(
 
     let totalPrice = 0;
 
-    const orderItems = [];
+    const orderItems: Array<{
+      product: {
+        connect: {
+          id: number;
+        };
+      };
+      productTitle: string;
+      productPrice: number;
+      productOffer: number;
+      quantity: number;
+      totalPrice: number;
+    }> = [];
 
+    /*
+     * Calculate the order using the current database
+     * price and offer.
+     */
     for (const item of cart.items) {
       const product = item.product;
 
@@ -77,25 +97,64 @@ export async function checkout(
         );
       }
 
+      if (
+        !Number.isInteger(item.quantity) ||
+        item.quantity <= 0
+      ) {
+        throw new Error(
+          `Invalid quantity for ${product.title}`
+        );
+      }
+
       if (product.count < item.quantity) {
         throw new Error(
           `Not enough stock for ${product.title}`
         );
       }
 
+      const price = Number(product.price);
+
+      if (!Number.isFinite(price) || price < 0) {
+        throw new Error(
+          `Invalid price for ${product.title}`
+        );
+      }
+
       /*
-       * If offer exists, use the offer price.
-       * Otherwise use the normal price.
+       * In your schema, "offer" is a percentage.
+       *
+       * Example:
+       * price = 10,000,000
+       * offer = 20
+       *
+       * final price = 8,000,000
        */
-      const unitPrice: Decimal =
-        product.offer !== null
-          ? product.offer
-          : product.price;
+      const offer =
+        product.offer === null
+          ? 0
+          : Number(product.offer);
 
-      const subtotal =
-        Number(unitPrice) * item.quantity;
+      if (
+        !Number.isFinite(offer) ||
+        offer < 0 ||
+        offer > 100
+      ) {
+        throw new Error(
+          `Invalid offer for ${product.title}`
+        );
+      }
 
-      totalPrice += subtotal;
+      const finalUnitPrice = roundMoney(
+        price * (1 - offer / 100)
+      );
+
+      const subtotal = roundMoney(
+        finalUnitPrice * item.quantity
+      );
+
+      totalPrice = roundMoney(
+        totalPrice + subtotal
+      );
 
       orderItems.push({
         product: {
@@ -103,48 +162,43 @@ export async function checkout(
             id: product.id,
           },
         },
+
         productTitle: product.title,
-        productPrice: Number(unitPrice),
+
+        /*
+         * Store the ORIGINAL price in OrderItem.
+         * This is useful for displaying the discount later.
+         */
+        productPrice: price,
+
+        /*
+         * Store the percentage discount separately.
+         */
+        productOffer: offer,
+
         quantity: item.quantity,
 
-        // OrderItem uses "totalPrice", not "subtotal"
+        /*
+         * Store the final price for this item.
+         */
         totalPrice: subtotal,
       });
     }
 
-    const order = await tx.order.create({
-      data: {
-        userId,
-
-        firstName: data.firstName.trim(),
-        lastName: data.lastName.trim(),
-        phone: data.phone.trim(),
-        address: data.address.trim(),
-
-        totalPrice,
-
-        items: {
-          create: orderItems,
-        },
-      },
-
-      include: {
-        items: true,
-      },
-    });
-
     /*
-     * Reduce inventory.
+     * Reserve/decrement stock atomically.
+     *
+     * IMPORTANT:
+     * purchaseCount is NOT incremented here.
+     *
+     * It should only increase after successful payment.
      */
     for (const item of cart.items) {
       const updated = await tx.product.updateMany({
         where: {
           id: item.productId,
+          isActive: true,
 
-          /*
-           * Prevent race conditions where another
-           * customer buys the remaining stock.
-           */
           count: {
             gte: item.quantity,
           },
@@ -153,10 +207,6 @@ export async function checkout(
         data: {
           count: {
             decrement: item.quantity,
-          },
-
-          purchaseCount: {
-            increment: item.quantity,
           },
         },
       });
@@ -169,8 +219,36 @@ export async function checkout(
     }
 
     /*
-     * Clear the cart only after the order and
-     * inventory updates succeeded.
+     * Create the order AFTER validating and reserving
+     * the required stock.
+     */
+    const order = await tx.order.create({
+      data: {
+        userId,
+
+        firstName,
+        lastName,
+        phone,
+        address,
+
+        totalPrice,
+
+        status: "PENDING",
+        paymentStatus: "PENDING",
+
+        items: {
+          create: orderItems,
+        },
+      },
+
+      include: {
+        items: true,
+      },
+    });
+
+    /*
+     * Clear the cart only after the order has been
+     * successfully created.
      */
     await tx.cartItem.deleteMany({
       where: {
