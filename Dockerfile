@@ -2,7 +2,6 @@ FROM node:22-alpine AS base
 
 WORKDIR /app
 
-
 # =========================
 # Dependencies
 # =========================
@@ -24,15 +23,15 @@ COPY --from=deps /app/node_modules ./node_modules
 
 COPY . .
 
-# Generate Prisma Client
+# Prisma Client
 RUN npx prisma generate
 
-# Build Next.js
+# Production build
 RUN npm run build
 
 
 # =========================
-# Production
+# Runner
 # =========================
 
 FROM node:22-alpine AS runner
@@ -41,16 +40,26 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Next.js standalone output
-COPY --from=builder /app/public ./public
+# We keep node_modules here because Prisma CLI
+# is needed for migrations.
+COPY --from=deps /app/node_modules ./node_modules
 
+# Next standalone output
 COPY --from=builder /app/.next/standalone ./
 
 COPY --from=builder /app/.next/static ./.next/static
 
-# Prisma files
+COPY --from=builder /app/public ./public
+
+# Prisma schema + migrations + config
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# Startup script
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["./docker-entrypoint.sh"]

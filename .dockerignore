@@ -5,7 +5,7 @@ node_modules
 .next
 out
 
-# Environment variables
+# Environment files
 .env
 .env.local
 .env.development
@@ -24,27 +24,27 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Testing / Coverage
-coverage
-.nyc_output
-
-# IDE / Editors
+# IDE
 .vscode
 .idea
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
 # Docker
+Dockerfile
 docker-compose.yml
 docker-compose.yaml
+compose.yml
+compose.yaml
 .dockerignore
 
-# Documentation
-README.md
+# Testing
+coverage
+.nyc_output
 
-# Temporary files
+# Temporary
 *.tmp
 *.temp
 *.swp
