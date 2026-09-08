@@ -38,9 +38,8 @@ export async function GET(request: NextRequest) {
       ? Number(maxPriceParam)
       : undefined;
 
-    const cursor = cursorParam
-      ? Number(cursorParam)
-      : undefined;
+    // Cursor is now a string
+    const cursor = cursorParam ?? undefined;
 
     const limit = limitParam
       ? Number(limitParam)
@@ -62,12 +61,43 @@ export async function GET(request: NextRequest) {
     }
 
     if (
-      cursor !== undefined &&
-      (!Number.isInteger(cursor) || cursor <= 0)
+      minPrice !== undefined &&
+      (!Number.isFinite(minPrice) ||
+        minPrice < 0)
     ) {
       return NextResponse.json(
         {
-          error: "Invalid cursor",
+          error: "Invalid minPrice",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      maxPrice !== undefined &&
+      (!Number.isFinite(maxPrice) ||
+        maxPrice < 0)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Invalid maxPrice",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      minPrice !== undefined &&
+      maxPrice !== undefined &&
+      minPrice > maxPrice
+    ) {
+      return NextResponse.json(
+        {
+          error: "minPrice cannot be greater than maxPrice",
         },
         {
           status: 400,

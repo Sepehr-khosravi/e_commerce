@@ -52,8 +52,24 @@ export async function getProductBySlug(
 }
 
 
-export async function getAdminProducts() {
-  return findAdminProducts();
+export async function getAdminProducts(
+  options: {
+    query?: string;
+    categoryId?: number;
+    cursor?: string;
+    limit?: number;
+    sort?: "newest" | "oldest";
+  } = {}
+) {
+  const limit = Math.min(
+    Math.max(options.limit ?? 10, 1),
+    50
+  );
+
+  return findAdminProducts({
+    ...options,
+    limit,
+  });
 }
 
 
@@ -72,15 +88,8 @@ export async function searchProducts(
   });
 }
 
-export async function getPopularProducts(
-  limit = 10
-) {
-  const safeLimit = Math.min(
-    Math.max(limit, 1),
-    100
-  );
-
-  return findPopularProducts(safeLimit);
+export async function getPopularProducts(limit: number = 10) {
+  return findPopularProducts(limit);
 }
 
 export async function getFeaturedProducts(

@@ -48,7 +48,7 @@ export default function CategoryProductsSection() {
         const categoriesData = await categoriesRes.json();
         const categories = Array.isArray(categoriesData) ? categoriesData : categoriesData.categories ?? [];
 
-        const productsRes = await fetch("/api/products/popular?limit=100");
+        const productsRes = await fetch("/api/products?limit=100");
         if (!productsRes.ok) throw new Error("Failed to fetch products");
         const productsData = await productsRes.json();
         const products = productsData.products || [];

@@ -34,7 +34,7 @@ export default function PopularProducts() {
     const fetchPopularProducts = async () => {
       try {
         setLoading(true);
-        const response = await fetch("/api/products/popular?limit=15");
+        const response = await fetch("/api/products/popular");
         
         if (!response.ok) {
           throw new Error("Failed to fetch products");
@@ -247,10 +247,12 @@ function PopularProductCard({ product }: { product: Product }) {
           {/* Price */}
           <div className="flex items-end justify-between gap-1">
             <div>
-              {hasOffer && (
+              {hasOffer ? (
                 <div className="text-[7px] md:text-[9px] text-neutral-400 line-through">
                   {formatPrice(price)}
                 </div>
+              ) : (
+                <div className="w-[7px] h-[7px] md:h-[9px] md:w-[9px] line-through"></div>
               )}
               <div className="flex items-baseline gap-0.5">
                 <span className="text-[10px] md:text-sm font-bold text-black">

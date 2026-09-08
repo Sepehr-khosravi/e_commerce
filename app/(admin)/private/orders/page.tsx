@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -48,7 +48,14 @@ type Payment = {
   id: number;
   orderId: number;
   amount: number | string;
+
+  /*
+   * Authority is sensitive payment information.
+   * It is only received from the protected admin
+   * order-details endpoint.
+   */
   authority: string;
+
   transactionId: string | null;
   status: PaymentStatus;
   paidAt: string | null;
@@ -102,8 +109,7 @@ type Order = {
   items: OrderItem[];
 
   /*
-   * مهم:
-   * یک Order می‌تواند چند Payment داشته باشد.
+   * A single order can have multiple payment attempts.
    */
   payments: Payment[];
 };
@@ -111,15 +117,22 @@ type Order = {
 type OrdersResponse = {
   orders?: Order[];
   nextCursor?: number | null;
+  hasMore?: boolean;
   hasNextPage?: boolean;
+};
+
+type ApiErrorResponse = {
+  error?: string;
 };
 
 /* =========================================================
    Constants
 ========================================================= */
 
+const DEFAULT_LIMIT = 10;
+
 const ORDER_STATUSES: OrderStatus[] = [
-  "PENDING", 
+  "PENDING",
   "PROCESSING",
   "SHIPPED",
   "DELIVERED",
@@ -134,10 +147,7 @@ const PAYMENT_STATUSES: PaymentStatus[] = [
   "REFUNDED",
 ];
 
-const ORDER_STATUS_LABELS: Record<
-  OrderStatus,
-  string
-> = {
+const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   PENDING: "در انتظار",
   PROCESSING: "در حال پردازش",
   SHIPPED: "ارسال شده",
@@ -146,10 +156,7 @@ const ORDER_STATUS_LABELS: Record<
   REFUNDED: "بازپرداخت شده",
 };
 
-const PAYMENT_STATUS_LABELS: Record<
-  PaymentStatus,
-  string
-> = {
+const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   PENDING: "در انتظار پرداخت",
   PAID: "پرداخت شده",
   FAILED: "ناموفق",
@@ -157,31 +164,30 @@ const PAYMENT_STATUS_LABELS: Record<
 };
 
 /*
- * چون این صفحه Client Component است،
- * فعلاً URL درگاه را اینجا می‌سازیم.
+ * This is only used to open an already-created payment attempt.
  *
- * اگر بعداً production شدی، بهتر است این مقدار
- * از Backend به صورت paymentUrl برگردد.
+ * IMPORTANT:
+ * The frontend should not use this value to verify payment.
+ * Payment verification must remain completely server-side.
  */
-const ZARINPAL_BASE_URL =
-  "https://sandbox.zarinpal.com";
+const ZARINPAL_BASE_URL = "https://sandbox.zarinpal.com";
 
 /* =========================================================
    Helpers
 ========================================================= */
 
-function formatPrice(
-  value: number | string
-) {
+function formatPrice(value: number | string) {
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
     return "۰";
   }
 
-  return new Intl.NumberFormat(
-    "fa-IR"
-  ).format(number);
+  return new Intl.NumberFormat("fa-IR").format(number);
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("fa-IR").format(value);
 }
 
 function formatDate(value?: string) {
@@ -195,52 +201,32 @@ function formatDate(value?: string) {
     return "—";
   }
 
-  return new Intl.DateTimeFormat(
-    "fa-IR",
-    {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  ).format(date);
+  return new Intl.DateTimeFormat("fa-IR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function getCustomerName(order: Order) {
-  const name =
-    `${order.firstName ?? ""} ${
-      order.lastName ?? ""
-    }`.trim();
+  const name = `${order.firstName ?? ""} ${
+    order.lastName ?? ""
+  }`.trim();
 
   return name || "کاربر بدون نام";
 }
 
-function getStatusLabel(
-  status: OrderStatus
-) {
+function getStatusLabel(status: OrderStatus) {
   return ORDER_STATUS_LABELS[status];
 }
 
-function getPaymentStatusLabel(
-  status: PaymentStatus
-) {
+function getPaymentStatusLabel(status: PaymentStatus) {
   return PAYMENT_STATUS_LABELS[status];
 }
 
-/*
- * ساخت URL پرداخت از authority
- *
- * authority:
- * مثلا:
- * A000000000000000000000000000000000000000
- *
- * خروجی:
- * https://sandbox.zarinpal.com/pg/StartPay/A000...
- */
-function getPaymentUrl(
-  authority: string
-) {
+function getPaymentUrl(authority: string) {
   if (
     typeof authority !== "string" ||
     !authority.trim()
@@ -258,41 +244,43 @@ function getPaymentUrl(
 ========================================================= */
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(
-    []
-  );
+  const [orders, setOrders] = useState<Order[]>([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
   const [status, setStatus] = useState<
     OrderStatus | "ALL"
   >("ALL");
 
-  const [
-    paymentStatus,
-    setPaymentStatus,
-  ] = useState<
+  const [paymentStatus, setPaymentStatus] = useState<
     PaymentStatus | "ALL"
   >("ALL");
 
-  const [nextCursor, setNextCursor] =
-    useState<number | null>(null);
+  /*
+   * Backend currently returns a numeric cursor.
+   */
+  const [nextCursor, setNextCursor] = useState<
+    number | null
+  >(null);
 
   const [hasNextPage, setHasNextPage] =
     useState(false);
 
+  /*
+   * cursorHistory[0] = null
+   * means first page.
+   *
+   * cursorHistory[n] = cursor used to request
+   * page n + 1.
+   */
   const [cursorHistory, setCursorHistory] =
     useState<(number | null)[]>([null]);
 
-  const [currentPage, setCurrentPage] =
-    useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [selectedOrder, setSelectedOrder] =
     useState<Order | null>(null);
@@ -302,6 +290,15 @@ export default function AdminOrdersPage() {
 
   const [refreshing, setRefreshing] =
     useState(false);
+
+  /*
+   * Used to prevent an older request from overwriting
+   * newer filter/page state.
+   */
+  // const [requestVersion, setRequestVersion] =
+  //   useState(0);
+
+  const requestVersionRef = useRef(0);
 
   /* =========================================================
      Load Orders
@@ -314,54 +311,55 @@ export default function AdminOrdersPage() {
       page?: number;
     }
   ) {
+    const requestVersion =
+      ++requestVersionRef.current;
+  
     try {
       if (options?.showLoading !== false) {
         setLoading(true);
       }
-
+  
       setError("");
-
-      const params =
-        new URLSearchParams();
-
-      params.set("limit", "20");
-
+  
+      const params = new URLSearchParams();
+  
+      params.set(
+        "limit",
+        String(DEFAULT_LIMIT)
+      );
+  
       if (cursor !== null) {
         params.set(
           "cursor",
           String(cursor)
         );
       }
-
+  
       if (status !== "ALL") {
-        params.set(
-          "status",
-          status
-        );
+        params.set("status", status);
       }
-
+  
       if (paymentStatus !== "ALL") {
         params.set(
           "paymentStatus",
           paymentStatus
         );
       }
-
+  
       const response = await fetch(
         `/api/admin/orders?${params.toString()}`,
         {
           method: "GET",
           cache: "no-store",
+          credentials: "same-origin",
         }
       );
-
-      const text =
-        await response.text();
-
-      let data: OrdersResponse & {
-        error?: string;
-      } = {};
-
+  
+      const text = await response.text();
+  
+      let data: OrdersResponse &
+        ApiErrorResponse = {};
+  
       try {
         data = text
           ? JSON.parse(text)
@@ -371,7 +369,15 @@ export default function AdminOrdersPage() {
           "پاسخ سرور JSON معتبر نیست."
         );
       }
-
+  
+      // Ignore only genuinely older requests.
+      if (
+        requestVersion !==
+        requestVersionRef.current
+      ) {
+        return;
+      }
+  
       if (
         response.status === 401 ||
         response.status === 403
@@ -380,42 +386,60 @@ export default function AdminOrdersPage() {
           "دسترسی به پنل مدیریت سفارش‌ها ندارید."
         );
       }
-
+  
       if (!response.ok) {
         throw new Error(
           data.error ||
             "دریافت سفارش‌ها ناموفق بود."
         );
       }
-
-      setOrders(
-        data.orders ?? []
-      );
-
+  
+      const receivedOrders =
+        Array.isArray(data.orders)
+          ? data.orders
+          : [];
+  
+      setOrders(receivedOrders);
+  
       setNextCursor(
         data.nextCursor ?? null
       );
-
+  
       setHasNextPage(
-        data.hasNextPage ?? false
+        data.hasMore ??
+          data.hasNextPage ??
+          false
       );
-
-      if (options?.page) {
-        setCurrentPage(
-          options.page
-        );
+  
+      if (options?.page !== undefined) {
+        setCurrentPage(options.page);
       }
     } catch (error) {
-      console.error(error);
-
+      console.error(
+        "Admin orders load error:",
+        error
+      );
+  
+      if (
+        requestVersion !==
+        requestVersionRef.current
+      ) {
+        return;
+      }
+  
       setError(
         error instanceof Error
           ? error.message
           : "خطایی رخ داده است."
       );
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (
+        requestVersion ===
+        requestVersionRef.current
+      ) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }
 
@@ -426,20 +450,25 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     setCurrentPage(1);
     setCursorHistory([null]);
-
-    loadOrders(null);
-
+  
+    loadOrders(null, {
+      page: 1,
+    });
+  
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     status,
     paymentStatus,
   ]);
-
   /* =========================================================
      Refresh
   ========================================================= */
 
   async function handleRefresh() {
+    if (refreshing) {
+      return;
+    }
+
     setRefreshing(true);
 
     const currentCursor =
@@ -451,6 +480,7 @@ export default function AdminOrdersPage() {
       currentCursor,
       {
         showLoading: false,
+        page: currentPage,
       }
     );
   }
@@ -462,15 +492,32 @@ export default function AdminOrdersPage() {
   async function openOrder(
     orderId: number
   ) {
+    /*
+     * Basic client-side validation.
+     *
+     * The actual authorization MUST happen
+     * inside /api/admin/orders/[id].
+     */
+    if (
+      !Number.isInteger(orderId) ||
+      orderId <= 0
+    ) {
+      return;
+    }
+
     try {
       setDetailsLoading(true);
+
       setError("");
 
       const response = await fetch(
-        `/api/admin/orders/${orderId}`,
+        `/api/admin/orders/${encodeURIComponent(
+          orderId
+        )}`,
         {
           method: "GET",
           cache: "no-store",
+          credentials: "same-origin",
         }
       );
 
@@ -492,6 +539,15 @@ export default function AdminOrdersPage() {
         );
       }
 
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
+        throw new Error(
+          "دسترسی به جزئیات سفارش ندارید."
+        );
+      }
+
       if (!response.ok) {
         throw new Error(
           data.error ||
@@ -509,7 +565,10 @@ export default function AdminOrdersPage() {
         data.order
       );
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Admin order details error:",
+        error
+      );
 
       alert(
         error instanceof Error
@@ -532,15 +591,30 @@ export default function AdminOrdersPage() {
       paymentStatus?: PaymentStatus;
     }
   ): Promise<Order | null> {
+    if (
+      !Number.isInteger(orderId) ||
+      orderId <= 0
+    ) {
+      return null;
+    }
+
+    /*
+     * Never trust the values from the UI.
+     * The API must validate status transitions and
+     * permissions again on the server.
+     */
     try {
       const response = await fetch(
-        `/api/admin/orders/${orderId}`,
+        `/api/admin/orders/${encodeURIComponent(
+          orderId
+        )}`,
         {
           method: "PATCH",
           headers: {
             "Content-Type":
               "application/json",
           },
+          credentials: "same-origin",
           body: JSON.stringify(data),
         }
       );
@@ -563,6 +637,15 @@ export default function AdminOrdersPage() {
         );
       }
 
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
+        throw new Error(
+          "دسترسی برای تغییر سفارش ندارید."
+        );
+      }
+
       if (!response.ok) {
         throw new Error(
           result.error ||
@@ -577,7 +660,7 @@ export default function AdminOrdersPage() {
       }
 
       /*
-       * سفارش موجود در لیست را هم آپدیت می‌کنیم.
+       * Only use the server response to update UI.
        */
       setOrders((current) =>
         current.map((item) =>
@@ -587,9 +670,6 @@ export default function AdminOrdersPage() {
         )
       );
 
-      /*
-       * Modal هم باید اطلاعات جدید را بگیرد.
-       */
       setSelectedOrder((current) =>
         current?.id === orderId
           ? result.order!
@@ -598,7 +678,10 @@ export default function AdminOrdersPage() {
 
       return result.order;
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Admin order update error:",
+        error
+      );
 
       alert(
         error instanceof Error
@@ -617,7 +700,8 @@ export default function AdminOrdersPage() {
   async function handleNextPage() {
     if (
       !hasNextPage ||
-      nextCursor === null
+      nextCursor === null ||
+      loading
     ) {
       return;
     }
@@ -625,15 +709,28 @@ export default function AdminOrdersPage() {
     const nextPage =
       currentPage + 1;
 
+    /*
+     * The cursor returned by the current page
+     * becomes the cursor used to request the next page.
+     */
+    const nextCursorValue =
+      nextCursor;
+
     setCursorHistory(
-      (current) => [
-        ...current,
-        nextCursor,
-      ]
+      (current) => {
+        const next = [
+          ...current,
+        ];
+
+        next[nextPage - 1] =
+          nextCursorValue;
+
+        return next;
+      }
     );
 
     await loadOrders(
-      nextCursor,
+      nextCursorValue,
       {
         page: nextPage,
       }
@@ -641,7 +738,10 @@ export default function AdminOrdersPage() {
   }
 
   async function handlePreviousPage() {
-    if (currentPage <= 1) {
+    if (
+      currentPage <= 1 ||
+      loading
+    ) {
       return;
     }
 
@@ -665,6 +765,14 @@ export default function AdminOrdersPage() {
      Search
   ========================================================= */
 
+  /*
+   * Search is intentionally client-side over the CURRENT page.
+   *
+   * It does NOT download every order from the database.
+   *
+   * If you later want global search across all orders,
+   * add a search parameter to the protected admin API.
+   */
   const filteredOrders = useMemo(() => {
     const normalizedSearch =
       search
@@ -702,7 +810,10 @@ export default function AdminOrdersPage() {
         );
       }
     );
-  }, [orders, search]);
+  }, [
+    orders,
+    search,
+  ]);
 
   /* =========================================================
      Stats
@@ -866,7 +977,7 @@ export default function AdminOrdersPage() {
                     event.target.value
                   )
                 }
-                placeholder="جستجو با نام، شماره تلفن یا شماره سفارش..."
+                placeholder="جستجو در سفارش‌های این صفحه..."
                 className="h-11 w-full rounded-xl bg-neutral-50 pr-11 pl-4 text-sm outline-none transition focus:bg-neutral-100"
               />
             </div>
@@ -915,13 +1026,10 @@ export default function AdminOrdersPage() {
 
             <div className="relative">
               <select
-                value={
-                  paymentStatus
-                }
+                value={paymentStatus}
                 onChange={(event) =>
                   setPaymentStatus(
-                    event.target
-                      .value as
+                    event.target.value as
                       | PaymentStatus
                       | "ALL"
                   )
@@ -1032,8 +1140,7 @@ export default function AdminOrdersPage() {
             )}
           </div>
 
-          {filteredOrders.length ===
-            0 && (
+          {filteredOrders.length === 0 && (
             <div className="px-6 py-20 text-center">
               <ShoppingBag
                 size={30}
@@ -1041,8 +1148,14 @@ export default function AdminOrdersPage() {
               />
 
               <p className="mt-4 text-sm font-semibold text-neutral-500">
-                سفارشی پیدا نشد
+                سفارشی در این صفحه پیدا نشد
               </p>
+
+              {search && (
+                <p className="mt-2 text-xs text-neutral-400">
+                  جستجو فقط روی سفارش‌های همین صفحه انجام می‌شود.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -1050,12 +1163,14 @@ export default function AdminOrdersPage() {
         {/* Pagination */}
 
         <div className="mt-5 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white p-3">
+
           <button
             onClick={
               handlePreviousPage
             }
             disabled={
-              currentPage <= 1
+              currentPage <= 1 ||
+              loading
             }
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-neutral-50 px-4 text-xs font-semibold text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -1065,9 +1180,9 @@ export default function AdminOrdersPage() {
 
           <span className="text-xs font-bold text-neutral-500">
             صفحه{" "}
-            {new Intl.NumberFormat(
-              "fa-IR"
-            ).format(currentPage)}
+            {formatNumber(
+              currentPage
+            )}
           </span>
 
           <button
@@ -1076,7 +1191,8 @@ export default function AdminOrdersPage() {
             }
             disabled={
               !hasNextPage ||
-              nextCursor === null
+              nextCursor === null ||
+              loading
             }
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-black px-4 text-xs font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -1132,9 +1248,7 @@ function StatCard({
       </p>
 
       <p className="mt-2 text-2xl font-bold text-black">
-        {new Intl.NumberFormat(
-          "fa-IR"
-        ).format(value)}
+        {formatNumber(value)}
       </p>
     </div>
   );
@@ -1158,15 +1272,13 @@ function OrderRow({
         <div>
           <p className="text-sm font-bold text-black">
             سفارش #
-            {new Intl.NumberFormat(
-              "fa-IR"
-            ).format(order.id)}
+            {formatNumber(
+              order.id
+            )}
           </p>
 
           <p className="mt-1 text-xs text-neutral-400">
-            {new Intl.NumberFormat(
-              "fa-IR"
-            ).format(
+            {formatNumber(
               order.items?.length ??
                 0
             )}{" "}
@@ -1203,7 +1315,6 @@ function OrderRow({
           {formatPrice(
             order.totalPrice
           )}{" "}
-
           تومان
         </p>
       </td>
@@ -1260,9 +1371,9 @@ function OrderMobileCard({
         <div>
           <p className="text-sm font-bold text-black">
             سفارش #
-            {new Intl.NumberFormat(
-              "fa-IR"
-            ).format(order.id)}
+            {formatNumber(
+              order.id
+            )}
           </p>
 
           <p className="mt-1 text-xs text-neutral-400">
@@ -1312,9 +1423,7 @@ function OrderMobileCard({
           </p>
 
           <p className="mt-1 text-xs font-bold text-black">
-            {new Intl.NumberFormat(
-              "fa-IR"
-            ).format(
+            {formatNumber(
               order.items?.length ??
                 0
             )}{" "}
@@ -1390,7 +1499,9 @@ function OrderDetailsModal({
   onUpdate,
 }: {
   order: Order;
+
   onClose: () => void;
+
   onUpdate: (
     orderId: number,
     data: {
@@ -1406,10 +1517,10 @@ function OrderDetailsModal({
     useState(false);
 
   /*
-   * یک Order ممکن است چند Payment داشته باشد.
+   * Find the latest payment attempt.
    *
-   * بنابراین بر اساس createdAt،
-   * جدیدترین Payment را پیدا می‌کنیم.
+   * This is only presentation logic.
+   * Payment state itself comes from the backend.
    */
   const latestPayment =
     order.payments?.length
@@ -1425,7 +1536,11 @@ function OrderDetailsModal({
       : null;
 
   /*
-   * فقط Paymentهای Pending قابل باز کردن هستند.
+   * We only construct the payment URL for
+   * a pending payment attempt.
+   *
+   * The backend remains responsible for payment
+   * creation and verification.
    */
   const paymentUrl =
     latestPayment?.status ===
@@ -1444,18 +1559,24 @@ function OrderDetailsModal({
   ========================================================= */
 
   async function changeStatus(
-    status: OrderStatus
+    nextStatus: OrderStatus
   ) {
-    if (status === order.status) {
+    if (
+      nextStatus ===
+      order.status
+    ) {
       return;
     }
 
     try {
       setUpdatingStatus(true);
 
-      await onUpdate(order.id, {
-        status,
-      });
+      await onUpdate(
+        order.id,
+        {
+          status: nextStatus,
+        }
+      );
     } finally {
       setUpdatingStatus(false);
     }
@@ -1466,10 +1587,10 @@ function OrderDetailsModal({
   ========================================================= */
 
   async function changePaymentStatus(
-    paymentStatus: PaymentStatus
+    nextPaymentStatus: PaymentStatus
   ) {
     if (
-      paymentStatus ===
+      nextPaymentStatus ===
       order.paymentStatus
     ) {
       return;
@@ -1478,9 +1599,13 @@ function OrderDetailsModal({
     try {
       setUpdatingPayment(true);
 
-      await onUpdate(order.id, {
-        paymentStatus,
-      });
+      await onUpdate(
+        order.id,
+        {
+          paymentStatus:
+            nextPaymentStatus,
+        }
+      );
     } finally {
       setUpdatingPayment(false);
     }
@@ -1497,7 +1622,6 @@ function OrderDetailsModal({
         {/* Header */}
 
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-100 bg-white p-5 sm:p-6">
-
           <div>
             <p className="text-xs font-semibold text-neutral-400">
               ORDER DETAILS
@@ -1505,9 +1629,9 @@ function OrderDetailsModal({
 
             <h2 className="mt-1 text-xl font-bold text-black">
               سفارش #
-              {new Intl.NumberFormat(
-                "fa-IR"
-              ).format(order.id)}
+              {formatNumber(
+                order.id
+              )}
             </h2>
           </div>
 
@@ -1517,14 +1641,11 @@ function OrderDetailsModal({
           >
             <X size={17} />
           </button>
-
         </div>
 
         <div className="space-y-6 p-5 sm:p-6">
 
-          {/* =================================================
-              Customer
-          ================================================= */}
+          {/* Customer */}
 
           <section>
             <SectionTitle>
@@ -1550,9 +1671,7 @@ function OrderDetailsModal({
 
               <InfoBox
                 label="شناسه کاربر"
-                value={new Intl.NumberFormat(
-                  "fa-IR"
-                ).format(
+                value={formatNumber(
                   order.userId
                 )}
               />
@@ -1577,9 +1696,7 @@ function OrderDetailsModal({
             </div>
           </section>
 
-          {/* =================================================
-              Status
-          ================================================= */}
+          {/* Status */}
 
           <section>
             <SectionTitle>
@@ -1591,15 +1708,15 @@ function OrderDetailsModal({
               {/* Order Status */}
 
               <div className="rounded-2xl border border-neutral-200 p-4">
-
                 <p className="text-xs font-semibold text-neutral-400">
                   وضعیت سفارش
                 </p>
 
                 <div className="relative mt-3">
-
                   <select
-                    value={order.status}
+                    value={
+                      order.status
+                    }
                     disabled={
                       updatingStatus
                     }
@@ -1638,20 +1755,17 @@ function OrderDetailsModal({
                       className="absolute left-9 top-1/2 -translate-y-1/2 animate-spin"
                     />
                   )}
-
                 </div>
               </div>
 
               {/* Payment Status */}
 
               <div className="rounded-2xl border border-neutral-200 p-4">
-
                 <p className="text-xs font-semibold text-neutral-400">
                   وضعیت پرداخت
                 </p>
 
                 <div className="relative mt-3">
-
                   <select
                     value={
                       order.paymentStatus
@@ -1694,16 +1808,13 @@ function OrderDetailsModal({
                       className="absolute left-9 top-1/2 -translate-y-1/2 animate-spin"
                     />
                   )}
-
                 </div>
               </div>
 
             </div>
           </section>
 
-          {/* =================================================
-              Payment
-          ================================================= */}
+          {/* Payment */}
 
           <section>
             <SectionTitle>
@@ -1712,19 +1823,14 @@ function OrderDetailsModal({
 
             <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 p-4">
 
-              {/* =========================
-                  PAID
-              ========================= */}
+              {/* PAID */}
 
               {latestPayment?.status ===
               "PAID" ? (
-
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                   <div>
-
                     <div className="flex items-center gap-2">
-
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100">
                         <CheckCircle2
                           size={16}
@@ -1735,7 +1841,6 @@ function OrderDetailsModal({
                       <p className="text-sm font-bold text-green-700">
                         پرداخت موفق
                       </p>
-
                     </div>
 
                     {latestPayment.transactionId && (
@@ -1750,7 +1855,7 @@ function OrderDetailsModal({
                     )}
 
                     {latestPayment.authority && (
-                      <p className="mt-1 text-xs text-neutral-400">
+                      <p className="mt-1 break-all text-xs text-neutral-400">
                         Authority:{" "}
                         <span className="font-mono text-[11px] text-neutral-500">
                           {
@@ -1759,11 +1864,9 @@ function OrderDetailsModal({
                         </span>
                       </p>
                     )}
-
                   </div>
 
                   <div className="text-left">
-
                     <p className="text-xs text-neutral-400">
                       مبلغ پرداخت شده
                     </p>
@@ -1782,22 +1885,16 @@ function OrderDetailsModal({
                         )}
                       </p>
                     )}
-
                   </div>
-
                 </div>
 
-              /* =========================
-                  PENDING
-              ========================= */
+              /* PENDING */
 
               ) : latestPayment?.status ===
                 "PENDING" ? (
-
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                   <div>
-
                     <p className="text-sm font-bold text-black">
                       پرداخت در انتظار
                     </p>
@@ -1816,13 +1913,13 @@ function OrderDetailsModal({
                         }
                       </p>
                     )}
-
                   </div>
 
                   {canOpenPayment ? (
-
                     <a
-                      href={paymentUrl!}
+                      href={
+                        paymentUrl!
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-black px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-neutral-800"
@@ -1830,31 +1927,22 @@ function OrderDetailsModal({
                       <ExternalLink
                         size={14}
                       />
-
                       مشاهده لینک پرداخت
                     </a>
-
                   ) : (
-
                     <span className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-white px-4 text-xs font-semibold text-neutral-400 shadow-sm">
                       لینک پرداخت موجود نیست
                     </span>
-
                   )}
-
                 </div>
 
-              /* =========================
-                  FAILED
-              ========================= */
+              /* FAILED */
 
               ) : latestPayment?.status ===
                 "FAILED" ? (
-
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
                   <div>
-
                     <p className="text-sm font-bold text-red-600">
                       پرداخت ناموفق
                     </p>
@@ -1867,24 +1955,18 @@ function OrderDetailsModal({
                       تلاش پرداخت جدید
                       ایجاد شود.
                     </p>
-
                   </div>
 
                   <span className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-red-50 px-4 text-xs font-semibold text-red-500">
                     پرداخت ناموفق
                   </span>
-
                 </div>
 
-              /* =========================
-                  REFUNDED
-              ========================= */
+              /* REFUNDED */
 
               ) : latestPayment?.status ===
                 "REFUNDED" ? (
-
                 <div>
-
                   <p className="text-sm font-bold text-neutral-700">
                     پرداخت بازپرداخت شده
                   </p>
@@ -1893,17 +1975,12 @@ function OrderDetailsModal({
                     مبلغ این پرداخت
                     بازپرداخت شده است.
                   </p>
-
                 </div>
 
-              /* =========================
-                  NO PAYMENT
-              ========================= */
+              /* NO PAYMENT */
 
               ) : (
-
                 <div>
-
                   <p className="text-sm font-bold text-black">
                     پرداختی ثبت نشده است
                   </p>
@@ -1913,30 +1990,24 @@ function OrderDetailsModal({
                     برای این سفارش ثبت
                     نشده است.
                   </p>
-
                 </div>
               )}
 
             </div>
           </section>
 
-          {/* =================================================
-              Items
-          ================================================= */}
+          {/* Items */}
 
           <section>
-
             <SectionTitle>
               کالاهای سفارش
             </SectionTitle>
 
             <div className="overflow-hidden rounded-2xl border border-neutral-200">
-
               <div className="divide-y divide-neutral-100">
 
                 {order.items?.map(
                   (item) => {
-
                     const originalPrice =
                       Number(
                         item.productPrice
@@ -1977,55 +2048,43 @@ function OrderDetailsModal({
                         {/* Product Image */}
 
                         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
-
-                          {item.product?.images?.[0] ? (
-
+                          {item.product
+                            ?.images?.[0] ? (
                             <img
                               src={normalizeImageUrl(
-                                item
-                                  .product
+                                item.product
                                   .images[0]
                               )}
                               alt={
-                                item
-                                  .product
+                                item.product
                                   .title ||
                                 item.productTitle
                               }
                               className="h-full w-full object-contain"
                             />
-
                           ) : (
-
                             <div className="flex h-full w-full items-center justify-center">
                               <Package
                                 size={18}
                                 className="text-neutral-300"
                               />
                             </div>
-
                           )}
-
                         </div>
 
                         {/* Product Info */}
 
                         <div className="min-w-0 flex-1">
-
                           <p className="truncate text-sm font-bold text-black">
-                            {item.product?.title ||
+                            {item.product
+                              ?.title ||
                               item.productTitle}
                           </p>
 
-                          {/* Quantity + Price */}
-
                           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-
                             <span className="text-neutral-400">
                               تعداد:{" "}
-                              {new Intl.NumberFormat(
-                                "fa-IR"
-                              ).format(
+                              {formatNumber(
                                 quantity
                               )}
                             </span>
@@ -2044,9 +2103,7 @@ function OrderDetailsModal({
                                 </span>
 
                                 <span className="rounded-lg bg-red-50 px-2 py-1 font-semibold text-red-500">
-                                  {new Intl.NumberFormat(
-                                    "fa-IR"
-                                  ).format(
+                                  {formatNumber(
                                     offer
                                   )}
                                   ٪ تخفیف
@@ -2060,14 +2117,10 @@ function OrderDetailsModal({
                                 تومان
                               </span>
                             )}
-
                           </div>
-
-                          {/* Discount Details */}
 
                           {hasDiscount && (
                             <div className="mt-2 flex flex-wrap items-center gap-2">
-
                               <span className="text-xs text-neutral-400">
                                 قیمت بعد از تخفیف:
                               </span>
@@ -2091,16 +2144,13 @@ function OrderDetailsModal({
                                 )}{" "}
                                 تومان
                               </span>
-
                             </div>
                           )}
-
                         </div>
 
                         {/* Final Item Price */}
 
                         <div className="shrink-0 text-left">
-
                           {hasDiscount && (
                             <p className="mb-1 text-xs text-neutral-400 line-through">
                               {formatPrice(
@@ -2123,7 +2173,6 @@ function OrderDetailsModal({
                               با تخفیف
                             </p>
                           )}
-
                         </div>
 
                       </div>
@@ -2136,9 +2185,7 @@ function OrderDetailsModal({
               {/* Final Total */}
 
               <div className="border-t border-neutral-100 bg-neutral-50 p-4">
-
                 <div className="flex items-center justify-between">
-
                   <span className="text-sm font-semibold text-neutral-500">
                     مبلغ نهایی
                   </span>
@@ -2149,27 +2196,20 @@ function OrderDetailsModal({
                     )}{" "}
                     تومان
                   </span>
-
                 </div>
-
               </div>
-
             </div>
           </section>
 
-          {/* =================================================
-              Bottom
-          ================================================= */}
+          {/* Bottom */}
 
           <div className="flex justify-end">
-
             <button
               onClick={onClose}
               className="h-11 rounded-xl bg-black px-6 text-sm font-semibold text-white transition hover:bg-neutral-800"
             >
               بستن
             </button>
-
           </div>
 
         </div>
@@ -2209,7 +2249,6 @@ function InfoBox({
 }) {
   return (
     <div className="rounded-2xl bg-neutral-50 p-4">
-
       <p className="text-[10px] font-medium text-neutral-400">
         {label}
       </p>
@@ -2217,7 +2256,6 @@ function InfoBox({
       <p className="mt-1 text-sm font-semibold leading-6 text-black">
         {value}
       </p>
-
     </div>
   );
 }
@@ -2237,7 +2275,6 @@ function OrdersSkeleton() {
         <div className="h-10 w-48 animate-pulse rounded-xl bg-neutral-200" />
 
         <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-
           {Array.from({
             length: 4,
           }).map((_, index) => (
@@ -2246,13 +2283,11 @@ function OrdersSkeleton() {
               className="h-28 animate-pulse rounded-2xl bg-neutral-200"
             />
           ))}
-
         </div>
 
         <div className="mt-8 h-20 animate-pulse rounded-2xl bg-neutral-200" />
 
         <div className="mt-5 overflow-hidden rounded-2xl bg-white">
-
           {Array.from({
             length: 7,
           }).map((_, index) => (
@@ -2261,7 +2296,6 @@ function OrdersSkeleton() {
               className="h-24 animate-pulse border-b border-neutral-100 bg-neutral-100"
             />
           ))}
-
         </div>
 
       </div>

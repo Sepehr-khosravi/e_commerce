@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import {
   Edit3,
@@ -12,11 +18,8 @@ import {
   X,
 } from "lucide-react";
 
+import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
 
-//for loading images.
-import {
-  normalizeImageUrl
-} from "@/app/lib/common/imageNormalizer"
 type Product = {
   id: number;
   title: string;
@@ -38,7 +41,7 @@ type Product = {
 
 type ProductsResponse = {
   products?: Product[];
-  nextCursor?: number | null;
+  nextCursor?: string | null;
   hasNextPage?: boolean;
 };
 
@@ -47,6 +50,8 @@ type Category = {
   name: string;
   slug?: string;
 };
+
+const LIMIT = 10;
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_IMAGES = 10;
@@ -101,15 +106,6 @@ function formatPrice(value: number | string) {
 |--------------------------------------------------------------------------
 | Discount helpers
 |--------------------------------------------------------------------------
-|
-| offer = percentage
-|
-| Example:
-| price = 1,000,000
-| offer = 20
-|
-| final price = 800,000
-|
 */
 
 function calculateDiscountedPrice(
@@ -219,105 +215,721 @@ async function hasValidImageSignature(
 */
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>(
-    []
-  );
+  const [products, setProducts] =
+    useState<Product[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [nextCursor, setNextCursor] =
+    useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
+  const [hasNextPage, setHasNextPage] =
+    useState(true);
 
-  const [status, setStatus] = useState<
-    "all" | "active" | "inactive"
-  >("all");
+  const [loading, setLoading] =
+    useState(true);
+
+  const [loadingMore, setLoadingMore] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Search
+  |--------------------------------------------------------------------------
+  */
+
+  const [search, setSearch] =
+    useState("");
+
+  const [searchResults, setSearchResults] =
+    useState<Product[] | null>(null);
+
+  const [searchLoading, setSearchLoading] =
+    useState(false);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Status
+  |--------------------------------------------------------------------------
+  */
+
+  const [status, setStatus] =
+    useState<
+      "all" | "active" | "inactive"
+    >("all");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Create modal
+  |--------------------------------------------------------------------------
+  */
 
   const [showCreate, setShowCreate] =
     useState(false);
 
-  async function loadProducts() {
-    try {
-      setLoading(true);
-      setError("");
+  /*
+  |--------------------------------------------------------------------------
+  | Infinite scroll refs
+  |--------------------------------------------------------------------------
+  */
 
-      const response = await fetch(
-        "/api/admin/products",
+  const loadMoreRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const loadingMoreRef =
+    useRef(false);
+
+  const requestedCursorRef =
+    useRef<string | null>(null);
+
+  const nextCursorRef =
+    useRef<string | null>(null);
+
+  const hasNextPageRef =
+    useRef(true);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Search request ref
+  |--------------------------------------------------------------------------
+  */
+
+  const searchAbortControllerRef =
+    useRef<AbortController | null>(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Keep pagination refs synchronized
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    nextCursorRef.current =
+      nextCursor;
+  }, [nextCursor]);
+
+  useEffect(() => {
+    hasNextPageRef.current =
+      hasNextPage;
+  }, [hasNextPage]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Load products
+  |--------------------------------------------------------------------------
+  |
+  | IMPORTANT:
+  |
+  | Search and status are NOT sent here.
+  |
+  | This endpoint is only responsible for:
+  |
+  | - initial products
+  | - cursor pagination
+  |
+  */
+
+  const loadProducts = useCallback(
+    async (
+      cursor: string | null = null,
+      append = false
+    ) => {
+      /*
+      |--------------------------------------------------------------------------
+      | Prevent duplicate pagination requests
+      |--------------------------------------------------------------------------
+      */
+
+      if (append) {
+        if (loadingMoreRef.current) {
+          return;
+        }
+
+        if (!hasNextPageRef.current) {
+          return;
+        }
+
+        if (!cursor) {
+          return;
+        }
+
+        if (
+          requestedCursorRef.current ===
+          cursor
+        ) {
+          return;
+        }
+
+        loadingMoreRef.current = true;
+        requestedCursorRef.current =
+          cursor;
+
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+
+        requestedCursorRef.current =
+          null;
+      }
+
+      try {
+        setError("");
+
+        const params =
+          new URLSearchParams();
+
+        params.set(
+          "limit",
+          String(LIMIT)
+        );
+
+        params.set(
+          "sort",
+          "newest"
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cursor
+        |--------------------------------------------------------------------------
+        */
+
+        if (cursor) {
+          params.set(
+            "cursor",
+            cursor
+          );
+        }
+
+        const response =
+          await fetch(
+            `/api/admin/products?${params.toString()}`,
+            {
+              method: "GET",
+              cache: "no-store",
+            }
+          );
+
+        const text =
+          await response.text();
+
+        let data:
+          | (ProductsResponse & {
+              error?: string;
+            })
+          = {};
+
+        try {
+          data = text
+            ? JSON.parse(text)
+            : {};
+        } catch {
+          throw new Error(
+            "پاسخ سرور JSON معتبر نیست."
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Authorization
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          response.status === 401 ||
+          response.status === 403
+        ) {
+          throw new Error(
+            "دسترسی به پنل ادمین ندارید."
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Server error
+        |--------------------------------------------------------------------------
+        */
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              "خطا در دریافت محصولات."
+          );
+        }
+
+        const incoming =
+          data.products ?? [];
+
+        /*
+        |--------------------------------------------------------------------------
+        | Update products
+        |--------------------------------------------------------------------------
+        */
+
+        setProducts((current) => {
+          /*
+          | First page
+          */
+
+          if (!append) {
+            return incoming;
+          }
+
+          /*
+          | Remove duplicated products
+          */
+
+          const existingIds =
+            new Set(
+              current.map(
+                (product) =>
+                  product.id
+              )
+            );
+
+          const uniqueIncoming =
+            incoming.filter(
+              (product) =>
+                !existingIds.has(
+                  product.id
+                )
+            );
+
+          return [
+            ...current,
+            ...uniqueIncoming,
+          ];
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Pagination state
+        |--------------------------------------------------------------------------
+        */
+
+        const newCursor =
+          data.nextCursor ?? null;
+
+        const newHasNext =
+          data.hasNextPage ?? false;
+
+        nextCursorRef.current =
+          newCursor;
+
+        hasNextPageRef.current =
+          newHasNext;
+
+        setNextCursor(
+          newCursor
+        );
+
+        setHasNextPage(
+          newHasNext
+        );
+      } catch (error) {
+        console.error(error);
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : "خطایی رخ داده است."
+        );
+      } finally {
+        if (append) {
+          loadingMoreRef.current =
+            false;
+
+          setLoadingMore(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    []
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Initial load
+  |--------------------------------------------------------------------------
+  |
+  | IMPORTANT:
+  |
+  | This runs ONLY once.
+  |
+  | Changing search/status will NOT
+  | reload the normal products endpoint.
+  |
+  */
+
+  useEffect(() => {
+    loadProducts(
+      null,
+      false
+    );
+  }, [loadProducts]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Search products
+  |--------------------------------------------------------------------------
+  |
+  | Search goes directly to:
+  |
+  | /api/admin/products/search
+  |
+  | Therefore it can find products that
+  | have not been loaded by infinite scroll.
+  |
+  */
+
+  useEffect(() => {
+    const query =
+      search.trim();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Empty search
+    |--------------------------------------------------------------------------
+    |
+    | Return to normal infinite-scroll list.
+    |
+    */
+
+    if (!query) {
+      if (
+        searchAbortControllerRef.current
+      ) {
+        searchAbortControllerRef.current.abort();
+
+        searchAbortControllerRef.current =
+          null;
+      }
+
+      setSearchResults(null);
+      setSearchLoading(false);
+
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Debounce
+    |--------------------------------------------------------------------------
+    */
+
+    const timeout =
+      window.setTimeout(
+        async () => {
+          /*
+          |--------------------------------------------------------------------------
+          | Cancel previous request
+          |--------------------------------------------------------------------------
+          */
+
+          if (
+            searchAbortControllerRef.current
+          ) {
+            searchAbortControllerRef.current.abort();
+          }
+
+          const controller =
+            new AbortController();
+
+          searchAbortControllerRef.current =
+            controller;
+
+          try {
+            setSearchLoading(true);
+            setError("");
+
+            const params =
+              new URLSearchParams();
+
+            params.set(
+              "q",
+              query
+            );
+
+            /*
+            | Service supports max 100.
+            |
+            | This gives search a much larger
+            | result set than the normal 10-item
+            | infinite-scroll pages.
+            */
+
+            params.set(
+              "limit",
+              "100"
+            );
+
+            params.set(
+              "sort",
+              "newest"
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Search request
+            |--------------------------------------------------------------------------
+            */
+
+            const response =
+              await fetch(
+                `/api/admin/products/search?${params.toString()}`,
+                {
+                  method: "GET",
+                  cache: "no-store",
+                  signal:
+                    controller.signal,
+                }
+              );
+
+            const text =
+              await response.text();
+
+            let data:
+              | (ProductsResponse & {
+                  error?: string;
+                })
+              = {};
+
+            try {
+              data = text
+                ? JSON.parse(text)
+                : {};
+            } catch {
+              throw new Error(
+                "پاسخ سرور سرچ معتبر نیست."
+              );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Ignore if this request was cancelled
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              controller.signal.aborted
+            ) {
+              return;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Authorization
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              response.status ===
+                401 ||
+              response.status ===
+                403
+            ) {
+              throw new Error(
+                "دسترسی به سرچ محصولات ندارید."
+              );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Server error
+            |--------------------------------------------------------------------------
+            */
+
+            if (!response.ok) {
+              throw new Error(
+                data.error ||
+                  "خطا در جستجوی محصولات."
+              );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Set search results
+            |--------------------------------------------------------------------------
+            */
+
+            setSearchResults(
+              data.products ?? []
+            );
+          } catch (error) {
+            /*
+            |--------------------------------------------------------------------------
+            | AbortError is expected when user keeps typing
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              error instanceof
+                DOMException &&
+              error.name ===
+                "AbortError"
+            ) {
+              return;
+            }
+
+            if (
+              controller.signal.aborted
+            ) {
+              return;
+            }
+
+            console.error(error);
+
+            setSearchResults([]);
+
+            setError(
+              error instanceof Error
+                ? error.message
+                : "خطا در جستجوی محصولات."
+            );
+          } finally {
+            if (
+              !controller.signal.aborted
+            ) {
+              setSearchLoading(false);
+            }
+          }
+        },
+        300
+      );
+
+    return () => {
+      window.clearTimeout(
+        timeout
+      );
+    };
+  }, [search]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Infinite Scroll
+  |--------------------------------------------------------------------------
+  |
+  | Only works when search is empty.
+  |
+  */
+
+  useEffect(() => {
+    const target =
+      loadMoreRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Do not infinite-scroll while searching
+    |--------------------------------------------------------------------------
+    */
+
+    if (search.trim()) {
+      return;
+    }
+
+    const observer =
+      new IntersectionObserver(
+        (entries) => {
+          const entry =
+            entries[0];
+
+          if (
+            !entry?.isIntersecting
+          ) {
+            return;
+          }
+
+          if (
+            loadingMoreRef.current
+          ) {
+            return;
+          }
+
+          if (
+            loading
+          ) {
+            return;
+          }
+
+          if (
+            !hasNextPageRef.current
+          ) {
+            return;
+          }
+
+          const cursor =
+            nextCursorRef.current;
+
+          if (!cursor) {
+            return;
+          }
+
+          loadProducts(
+            cursor,
+            true
+          );
+        },
         {
-          method: "GET",
-          cache: "no-store",
+          root: null,
+
+          /*
+          | Start loading the next page
+          | before the user reaches the bottom.
+          */
+
+          rootMargin:
+            "400px 0px",
+
+          threshold: 0,
         }
       );
 
-      const text = await response.text();
+    observer.observe(target);
 
-      let data: ProductsResponse & {
-        error?: string;
-      };
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    search,
+    loading,
+    loadProducts,
+  ]);
 
-      try {
-        data = text
-          ? JSON.parse(text)
-          : {};
-      } catch {
-        throw new Error(
-          "پاسخ سرور JSON معتبر نیست."
-        );
-      }
-
-      if (
-        response.status === 401 ||
-        response.status === 403
-      ) {
-        throw new Error(
-          "دسترسی به پنل ادمین ندارید."
-        );
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-            "خطا در دریافت محصولات."
-        );
-      }
-
-      setProducts(data.products ?? []);
-    } catch (error) {
-      console.error(error);
-
-      setError(
-        error instanceof Error
-          ? error.message
-          : "خطایی رخ داده است."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  /*
+  |--------------------------------------------------------------------------
+  | Delete product
+  |--------------------------------------------------------------------------
+  */
 
   async function handleDelete(
     product: Product
   ) {
-    const confirmed = window.confirm(
-      `آیا مطمئن هستید که «${product.title}» غیرفعال شود؟`
-    );
+    const confirmed =
+      window.confirm(
+        `آیا مطمئن هستید که «${product.title}» غیرفعال شود؟`
+      );
 
     if (!confirmed) {
       return;
     }
 
     try {
-      const response = await fetch(
-        `/api/admin/products/${product.id}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response =
+        await fetch(
+          `/api/admin/products/${product.id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
-      const text = await response.text();
+      const text =
+        await response.text();
 
       let data: {
         error?: string;
@@ -340,15 +952,51 @@ export default function AdminProductsPage() {
         );
       }
 
-      setProducts((current) =>
-        current.map((item) =>
-          item.id === product.id
-            ? {
-                ...item,
-                isActive: false,
-              }
-            : item
-        )
+      /*
+      |--------------------------------------------------------------------------
+      | Update normal products
+      |--------------------------------------------------------------------------
+      */
+
+      setProducts(
+        (current) =>
+          current.map(
+            (item) =>
+              item.id ===
+              product.id
+                ? {
+                    ...item,
+                    isActive:
+                      false,
+                  }
+                : item
+          )
+      );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Update search results too
+      |--------------------------------------------------------------------------
+      */
+
+      setSearchResults(
+        (current) => {
+          if (!current) {
+            return current;
+          }
+
+          return current.map(
+            (item) =>
+              item.id ===
+              product.id
+                ? {
+                    ...item,
+                    isActive:
+                      false,
+                  }
+                : item
+          );
+        }
       );
     } catch (error) {
       alert(
@@ -359,39 +1007,78 @@ export default function AdminProductsPage() {
     }
   }
 
-  const filteredProducts = useMemo(() => {
-    const normalizedSearch =
-      search.trim().toLowerCase();
+  /*
+  |--------------------------------------------------------------------------
+  | Display products
+  |--------------------------------------------------------------------------
+  |
+  | If search is active:
+  |
+  | searchResults
+  |
+  | Otherwise:
+  |
+  | products
+  |
+  */
 
-    return products.filter((product) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        product.title
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        product.slug
-          .toLowerCase()
-          .includes(normalizedSearch);
+  const displayedProducts =
+    search.trim()
+      ? searchResults ?? []
+      : products;
 
-      const matchesStatus =
-        status === "all" ||
-        (status === "active" &&
-          product.isActive) ||
-        (status === "inactive" &&
-          !product.isActive);
+  /*
+  |--------------------------------------------------------------------------
+  | Client-side status filtering
+  |--------------------------------------------------------------------------
+  |
+  | Status does NOT cause a request.
+  |
+  */
 
-      return (
-        matchesSearch &&
-        matchesStatus
+  const filteredProducts =
+    useMemo(() => {
+      return displayedProducts.filter(
+        (product) => {
+          if (
+            status ===
+            "active"
+          ) {
+            return product.isActive;
+          }
+
+          if (
+            status ===
+            "inactive"
+          ) {
+            return !product.isActive;
+          }
+
+          return true;
+        }
       );
-    });
-  }, [products, search, status]);
+    }, [
+      displayedProducts,
+      status,
+    ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading
+  |--------------------------------------------------------------------------
+  */
 
   if (loading) {
     return <ProductsSkeleton />;
   }
 
-  if (error) {
+  /*
+  |--------------------------------------------------------------------------
+  | Error
+  |--------------------------------------------------------------------------
+  */
+
+  if (error && !search.trim()) {
     return (
       <main
         dir="rtl"
@@ -409,7 +1096,12 @@ export default function AdminProductsPage() {
             </h1>
 
             <button
-              onClick={loadProducts}
+              onClick={() =>
+                loadProducts(
+                  null,
+                  false
+                )
+              }
               className="mt-6 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white hover:bg-neutral-800"
             >
               تلاش دوباره
@@ -419,6 +1111,12 @@ export default function AdminProductsPage() {
       </main>
     );
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <main
@@ -459,7 +1157,9 @@ export default function AdminProductsPage() {
         <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             title="همه محصولات"
-            value={products.length}
+            value={
+              products.length
+            }
           />
 
           <StatCard
@@ -514,11 +1214,19 @@ export default function AdminProductsPage() {
                 placeholder="جستجوی محصول..."
                 className="h-11 w-full rounded-xl bg-neutral-50 pr-11 pl-4 text-sm outline-none transition focus:bg-neutral-100"
               />
+
+              {searchLoading && (
+                <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-200 border-t-black" />
+                </div>
+              )}
             </div>
 
             <div className="flex rounded-xl bg-neutral-50 p-1">
               <FilterButton
-                active={status === "all"}
+                active={
+                  status === "all"
+                }
                 onClick={() =>
                   setStatus("all")
                 }
@@ -528,10 +1236,13 @@ export default function AdminProductsPage() {
 
               <FilterButton
                 active={
-                  status === "active"
+                  status ===
+                  "active"
                 }
                 onClick={() =>
-                  setStatus("active")
+                  setStatus(
+                    "active"
+                  )
                 }
               >
                 فعال
@@ -539,16 +1250,37 @@ export default function AdminProductsPage() {
 
               <FilterButton
                 active={
-                  status === "inactive"
+                  status ===
+                  "inactive"
                 }
                 onClick={() =>
-                  setStatus("inactive")
+                  setStatus(
+                    "inactive"
+                  )
                 }
               >
                 غیرفعال
               </FilterButton>
             </div>
           </div>
+
+          {/* Search status */}
+
+          {search.trim() && (
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-[11px] text-neutral-400">
+                {searchLoading
+                  ? "در حال جستجو..."
+                  : searchResults
+                    ? `${new Intl.NumberFormat(
+                        "fa-IR"
+                      ).format(
+                        searchResults.length
+                      )} نتیجه پیدا شد`
+                    : "در حال جستجو..."}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Products */}
@@ -592,7 +1324,9 @@ export default function AdminProductsPage() {
                     <ProductRow
                       key={product.id}
                       product={product}
-                      onDelete={handleDelete}
+                      onDelete={
+                        handleDelete
+                      }
                     />
                   )
                 )}
@@ -608,27 +1342,85 @@ export default function AdminProductsPage() {
                 <ProductMobileCard
                   key={product.id}
                   product={product}
-                  onDelete={handleDelete}
+                  onDelete={
+                    handleDelete
+                  }
                 />
               )
             )}
           </div>
 
-          {filteredProducts.length ===
-            0 && (
-            <div className="px-6 py-20 text-center">
-              <Package
-                size={30}
-                className="mx-auto text-neutral-300"
-              />
+          {/* Search loading */}
 
-              <p className="mt-4 text-sm font-semibold text-neutral-500">
-                محصولی پیدا نشد
-              </p>
-            </div>
-          )}
+          {search.trim() &&
+            searchLoading && (
+              <div className="flex items-center justify-center border-t border-neutral-100 px-6 py-6">
+                <div className="flex items-center gap-2 text-xs text-neutral-400">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-200 border-t-black" />
+
+                  <span>
+                    در حال جستجوی محصولات...
+                  </span>
+                </div>
+              </div>
+            )}
+
+          {/* Infinite Scroll Sentinel */}
+
+          {!search.trim() &&
+            hasNextPage && (
+              <div
+                ref={loadMoreRef}
+                className="flex min-h-20 items-center justify-center"
+                aria-hidden="true"
+              >
+                {loadingMore && (
+                  <div className="flex items-center gap-2 text-xs text-neutral-400">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-200 border-t-black" />
+
+                    <span>
+                      در حال دریافت محصولات...
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+          {/* No more products */}
+
+          {!search.trim() &&
+            !hasNextPage &&
+            filteredProducts.length >
+              0 && (
+              <div className="flex items-center justify-center border-t border-neutral-100 px-6 py-5">
+                <span className="text-[11px] text-neutral-400">
+                  همه محصولات نمایش داده شدند.
+                </span>
+              </div>
+            )}
+
+          {/* Empty */}
+
+          {filteredProducts.length ===
+            0 &&
+            !searchLoading && (
+              <div className="px-6 py-20 text-center">
+                <Package
+                  size={30}
+                  className="mx-auto text-neutral-300"
+                />
+
+                <p className="mt-4 text-sm font-semibold text-neutral-500">
+                  {search.trim()
+                    ? "محصولی با این عبارت پیدا نشد"
+                    : "محصولی پیدا نشد"}
+                </p>
+              </div>
+            )}
         </div>
       </div>
+
+      {/* Create Product */}
 
       {showCreate && (
         <CreateProductModal
@@ -636,10 +1428,12 @@ export default function AdminProductsPage() {
             setShowCreate(false)
           }
           onCreated={(product) => {
-            setProducts((current) => [
-              product,
-              ...current,
-            ]);
+            setProducts(
+              (current) => [
+                product,
+                ...current,
+              ]
+            );
 
             setShowCreate(false);
           }}
@@ -721,9 +1515,10 @@ function ProductRow({
     product: Product
   ) => void;
 }) {
-  const offer = getOfferNumber(
-    product.offer
-  );
+  const offer =
+    getOfferNumber(
+      product.offer
+    );
 
   const finalPrice =
     calculateDiscountedPrice(
@@ -755,8 +1550,6 @@ function ProductRow({
         </div>
       </td>
 
-      {/* Price */}
-
       <td className="px-6 py-4">
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
@@ -769,7 +1562,10 @@ function ProductRow({
 
             {hasDiscount && (
               <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[9px] font-bold text-neutral-500">
-                {formatPrice(offer)}٪
+                {formatPrice(
+                  offer
+                )}
+                ٪
               </span>
             )}
           </div>
@@ -803,7 +1599,9 @@ function ProductRow({
 
       <td className="px-6 py-4">
         <StatusBadge
-          active={product.isActive}
+          active={
+            product.isActive
+          }
         />
       </td>
 
@@ -847,9 +1645,10 @@ function ProductMobileCard({
     product: Product
   ) => void;
 }) {
-  const offer = getOfferNumber(
-    product.offer
-  );
+  const offer =
+    getOfferNumber(
+      product.offer
+    );
 
   const finalPrice =
     calculateDiscountedPrice(
@@ -881,13 +1680,13 @@ function ProductMobileCard({
             </div>
 
             <StatusBadge
-              active={product.isActive}
+              active={
+                product.isActive
+              }
             />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {/* Price */}
-
             <div className="rounded-lg bg-neutral-50 px-3 py-2">
               <p className="text-[10px] text-neutral-400">
                 قیمت
@@ -918,8 +1717,6 @@ function ProductMobileCard({
               )}
             </div>
 
-            {/* Stock */}
-
             <div className="rounded-lg bg-neutral-50 px-3 py-2">
               <p className="text-[10px] text-neutral-400">
                 موجودی
@@ -933,8 +1730,6 @@ function ProductMobileCard({
                 )}
               </p>
             </div>
-
-            {/* Sales */}
 
             <div className="rounded-lg bg-neutral-50 px-3 py-2">
               <p className="text-[10px] text-neutral-400">
@@ -992,7 +1787,9 @@ function ProductImage({
     <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
       {product.images?.[0] ? (
         <img
-          src={normalizeImageUrl(product.images[0])}
+          src={normalizeImageUrl(
+            product.images[0]
+          )}
           alt={product.title}
           className="h-full w-full object-contain"
         />
@@ -1035,7 +1832,9 @@ function StatusBadge({
         }`}
       />
 
-      {active ? "فعال" : "غیرفعال"}
+      {active
+        ? "فعال"
+        : "غیرفعال"}
     </span>
   );
 }
@@ -1102,13 +1901,6 @@ function CreateProductModal({
 
   const [price, setPrice] =
     useState("");
-
-  /*
-   * Offer is percentage.
-   *
-   * Example:
-   * 20 = 20%
-   */
 
   const [offer, setOffer] =
     useState("");
@@ -1178,12 +1970,13 @@ function CreateProductModal({
     try {
       setCategoriesLoading(true);
 
-      const response = await fetch(
-        "/api/categories",
-        {
-          cache: "no-store",
-        }
-      );
+      const response =
+        await fetch(
+          "/api/categories",
+          {
+            cache: "no-store",
+          }
+        );
 
       const text =
         await response.text();
@@ -1265,7 +2058,10 @@ function CreateProductModal({
     }
 
     const selectedFiles =
-      files.slice(0, remainingSlots);
+      files.slice(
+        0,
+        remainingSlots
+      );
 
     const rejected: string[] = [];
 
@@ -1344,7 +2140,8 @@ function CreateProductModal({
     index: number
   ) {
     setImages((current) => {
-      const image = current[index];
+      const image =
+        current[index];
 
       if (image?.preview) {
         URL.revokeObjectURL(
@@ -1379,7 +2176,8 @@ function CreateProductModal({
       );
     }
 
-    const formData = new FormData();
+    const formData =
+      new FormData();
 
     files.forEach((file) => {
       formData.append(
@@ -1388,13 +2186,14 @@ function CreateProductModal({
       );
     });
 
-    const response = await fetch(
-      "/api/admin/upload",
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
+    const response =
+      await fetch(
+        "/api/admin/upload",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
     const text =
       await response.text();
@@ -1434,7 +2233,8 @@ function CreateProductModal({
     if (
       !data.success ||
       !Array.isArray(data.urls) ||
-      data.urls.length !== files.length
+      data.urls.length !==
+        files.length
     ) {
       throw new Error(
         "آدرس تصاویر از سرور دریافت نشد."
@@ -1483,12 +2283,6 @@ function CreateProductModal({
         );
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Price
-      |--------------------------------------------------------------------------
-      */
-
       const numericPrice =
         getNumericPrice(price);
 
@@ -1504,23 +2298,15 @@ function CreateProductModal({
         );
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Offer
-      |--------------------------------------------------------------------------
-      |
-      | offer is percentage.
-      |
-      | 20 => 20%
-      |
-      */
-
       let numericOffer = 0;
 
       if (offer.trim()) {
         numericOffer =
           Number(
-            offer.replace(/,/g, "")
+            offer.replace(
+              /,/g,
+              ""
+            )
           );
 
         if (
@@ -1536,12 +2322,6 @@ function CreateProductModal({
         }
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Count
-      |--------------------------------------------------------------------------
-      */
-
       const numericCount =
         Number(count);
 
@@ -1556,12 +2336,6 @@ function CreateProductModal({
         );
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Images
-      |--------------------------------------------------------------------------
-      */
-
       if (images.length === 0) {
         throw new Error(
           "حداقل یک تصویر برای محصول انتخاب کنید."
@@ -1574,68 +2348,45 @@ function CreateProductModal({
         );
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Upload
-      |--------------------------------------------------------------------------
-      */
-
       const uploadedUrls =
         await uploadImages(
           images.map(
-            (image) => image.file
+            (image) =>
+              image.file
           )
         );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Create product
-      |--------------------------------------------------------------------------
-      */
-
       const body = {
         title: trimmedTitle,
-
         slug: trimmedSlug,
-
         price: numericPrice,
-
-        /*
-         * Percentage
-         *
-         * Example:
-         * 20 = 20%
-         */
         offer: numericOffer,
-
         images: uploadedUrls,
-
         description:
           description.trim(),
-
         categoryId:
           Number(categoryId),
-
         count: numericCount,
-
         isFeatured,
-
         isActive: true,
       };
 
-      const response = await fetch(
-        "/api/admin/products",
-        {
-          method: "POST",
+      const response =
+        await fetch(
+          "/api/admin/products",
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          body: JSON.stringify(body),
-        }
-      );
+            body: JSON.stringify(
+              body
+            ),
+          }
+        );
 
       const text =
         await response.text();
@@ -1679,7 +2430,9 @@ function CreateProductModal({
         );
       }
 
-      onCreated(data.product);
+      onCreated(
+        data.product
+      );
     } catch (error) {
       console.error(error);
 
@@ -1706,8 +2459,6 @@ function CreateProductModal({
           dir="rtl"
           className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8"
         >
-          {/* Header */}
-
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-black">
@@ -1816,9 +2567,13 @@ function CreateProductModal({
                   (category) => (
                     <option
                       key={category.id}
-                      value={category.id}
+                      value={
+                        category.id
+                      }
                     >
-                      {category.name}
+                      {
+                        category.name
+                      }
                     </option>
                   )
                 )}
@@ -1839,8 +2594,6 @@ function CreateProductModal({
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                {/* Price */}
-
                 <div>
                   <label className="mb-2 block text-xs font-semibold text-neutral-600">
                     قیمت اصلی
@@ -1867,8 +2620,6 @@ function CreateProductModal({
                   />
                 </div>
 
-                {/* Offer */}
-
                 <div>
                   <label className="mb-2 block text-xs font-semibold text-neutral-600">
                     تخفیف
@@ -1879,14 +2630,18 @@ function CreateProductModal({
                       type="text"
                       inputMode="decimal"
                       value={offer}
-                      onChange={(event) => {
+                      onChange={(
+                        event
+                      ) => {
                         const value =
                           event.target.value.replace(
                             /[^\d.]/g,
                             ""
                           );
 
-                        setOffer(value);
+                        setOffer(
+                          value
+                        );
                       }}
                       placeholder="20"
                       className="h-11 w-full rounded-xl bg-neutral-50 px-4 pl-10 text-sm outline-none transition focus:bg-neutral-100"
@@ -1902,8 +2657,6 @@ function CreateProductModal({
                     offer={offer}
                   />
                 </div>
-
-                {/* Count */}
 
                 <Input
                   label="موجودی"
@@ -1930,13 +2683,18 @@ function CreateProductModal({
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {images.map(
-                  (image, index) => (
+                  (
+                    image,
+                    index
+                  ) => (
                     <div
                       key={`${image.file.name}-${image.file.lastModified}-${index}`}
                       className="group relative aspect-square overflow-hidden rounded-2xl bg-neutral-100"
                     >
                       <img
-                        src={image.preview}
+                        src={
+                          image.preview
+                        }
                         alt={`تصویر ${
                           index + 1
                         }`}
@@ -1950,13 +2708,18 @@ function CreateProductModal({
                             index
                           )
                         }
-                        disabled={loading}
+                        disabled={
+                          loading
+                        }
                         className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-white opacity-0 transition group-hover:opacity-100 disabled:cursor-not-allowed"
                       >
-                        <Trash2 size={14} />
+                        <Trash2
+                          size={14}
+                        />
                       </button>
 
-                      {index === 0 && (
+                      {index ===
+                        0 && (
                         <span className="absolute bottom-2 right-2 rounded-lg bg-white/90 px-2 py-1 text-[9px] font-bold text-black">
                           تصویر اصلی
                         </span>
@@ -1968,15 +2731,22 @@ function CreateProductModal({
                 {images.length <
                   MAX_IMAGES && (
                   <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-200 bg-neutral-50 text-neutral-400 transition hover:border-neutral-400 hover:bg-neutral-100 hover:text-black">
-                    <ImagePlus size={22} />
+                    <ImagePlus
+                      size={22}
+                    />
 
                     <span className="mt-2 text-xs font-semibold">
                       افزودن تصویر
                     </span>
 
                     <span className="mt-1 text-[9px] text-neutral-400">
-                      {images.length}/
-                      {MAX_IMAGES}
+                      {
+                        images.length
+                      }
+                      /
+                      {
+                        MAX_IMAGES
+                      }
                     </span>
 
                     <input
@@ -1986,7 +2756,9 @@ function CreateProductModal({
                       onChange={
                         handleImagesChange
                       }
-                      disabled={loading}
+                      disabled={
+                        loading
+                      }
                       className="hidden"
                     />
                   </label>
@@ -2002,7 +2774,8 @@ function CreateProductModal({
 
               <p className="mt-3 text-[10px] text-neutral-400">
                 JPG, PNG, WEBP — حداکثر ۵MB برای هر تصویر — حداکثر{" "}
-                {MAX_IMAGES} تصویر
+                {MAX_IMAGES}{" "}
+                تصویر
               </p>
             </div>
 
@@ -2031,13 +2804,20 @@ function CreateProductModal({
             <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-neutral-50 p-4">
               <input
                 type="checkbox"
-                checked={isFeatured}
-                onChange={(event) =>
+                checked={
+                  isFeatured
+                }
+                onChange={(
+                  event
+                ) =>
                   setIsFeatured(
-                    event.target.checked
+                    event.target
+                      .checked
                   )
                 }
-                disabled={loading}
+                disabled={
+                  loading
+                }
                 className="h-4 w-4 accent-black"
               />
 
@@ -2084,7 +2864,9 @@ function CreateProductModal({
               false
             )
           }
-          onCreated={(category) => {
+          onCreated={(
+            category
+          ) => {
             setCategories(
               (current) => [
                 ...current,
@@ -2093,7 +2875,9 @@ function CreateProductModal({
             );
 
             setCategoryId(
-              String(category.id)
+              String(
+                category.id
+              )
             );
 
             setShowCreateCategory(
@@ -2130,13 +2914,6 @@ function CreateCategoryModal({
   const [error, setError] =
     useState("");
 
-  /*
-   * Generate a simple slug.
-   *
-   * Persian characters are allowed in the slug,
-   * but spaces are replaced with hyphens.
-   */
-
   function generateSlug(
     value: string
   ) {
@@ -2172,7 +2949,9 @@ function CreateCategoryModal({
       }
 
       const slug =
-        generateSlug(trimmedName);
+        generateSlug(
+          trimmedName
+        );
 
       if (!slug) {
         throw new Error(
@@ -2180,23 +2959,24 @@ function CreateCategoryModal({
         );
       }
 
-      const response = await fetch(
-        "/api/admin/categories",
-        {
-          method: "POST",
+      const response =
+        await fetch(
+          "/api/admin/categories",
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          body: JSON.stringify({
-            name: trimmedName,
-            slug,
-            description: "",
-          }),
-        }
-      );
+            body: JSON.stringify({
+              name: trimmedName,
+              slug,
+              description: "",
+            }),
+          }
+        );
 
       const text =
         await response.text();
@@ -2219,7 +2999,8 @@ function CreateCategoryModal({
       }
 
       if (
-        response.status === 401
+        response.status ===
+        401
       ) {
         throw new Error(
           "دسترسی شما تأیید نشد."
@@ -2227,7 +3008,8 @@ function CreateCategoryModal({
       }
 
       if (
-        response.status === 403
+        response.status ===
+        403
       ) {
         throw new Error(
           "شما دسترسی ادمین ندارید."
@@ -2270,8 +3052,6 @@ function CreateCategoryModal({
         dir="rtl"
         className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl sm:p-7"
       >
-        {/* Header */}
-
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-black">
@@ -2294,7 +3074,9 @@ function CreateCategoryModal({
         </div>
 
         <form
-          onSubmit={handleSubmit}
+          onSubmit={
+            handleSubmit
+          }
           className="mt-6"
         >
           <Input
@@ -2409,7 +3191,8 @@ function PricePreview({
 
   return (
     <p className="mt-2 text-[10px] font-medium text-neutral-400">
-      {formatToman(number)} تومان
+      {formatToman(number)}{" "}
+      تومان
     </p>
   );
 }
@@ -2436,7 +3219,10 @@ function DiscountPreview({
 
   const numericOffer =
     Number(
-      offer.replace(/,/g, "")
+      offer.replace(
+        /,/g,
+        ""
+      )
     );
 
   if (
@@ -2490,12 +3276,14 @@ function ProductsSkeleton() {
         <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
           {Array.from({
             length: 4,
-          }).map((_, index) => (
-            <div
-              key={index}
-              className="h-28 animate-pulse rounded-2xl bg-neutral-200"
-            />
-          ))}
+          }).map(
+            (_, index) => (
+              <div
+                key={index}
+                className="h-28 animate-pulse rounded-2xl bg-neutral-200"
+              />
+            )
+          )}
         </div>
 
         <div className="mt-8 h-20 animate-pulse rounded-2xl bg-neutral-200" />
@@ -2503,12 +3291,14 @@ function ProductsSkeleton() {
         <div className="mt-5 overflow-hidden rounded-2xl bg-white">
           {Array.from({
             length: 7,
-          }).map((_, index) => (
-            <div
-              key={index}
-              className="h-24 animate-pulse border-b border-neutral-100 bg-neutral-100"
-            />
-          ))}
+          }).map(
+            (_, index) => (
+              <div
+                key={index}
+                className="h-24 animate-pulse border-b border-neutral-100 bg-neutral-100"
+              />
+            )
+          )}
         </div>
       </div>
     </main>

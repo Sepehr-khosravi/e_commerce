@@ -1,33 +1,55 @@
 import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
-export default function ProductSkeleton() {
+export default function CategorySkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white">
-      <div className="aspect-square">
-        <Skeleton
-          width="100%"
-          height="100%"
-          borderRadius={0}
-        />
-      </div>
-
-      <div className="p-4 sm:p-5">
-        <Skeleton width="80%" height={16} />
-        <Skeleton width="60%" height={16} />
-
-        <div className="mt-5 flex items-center justify-between">
-          <div>
-            <Skeleton width={80} height={12} />
-            <Skeleton width={120} height={16} />
-          </div>
+    <div
+      dir="rtl"
+      className="
+        -mx-4
+        flex
+        flex-nowrap
+        items-start
+        justify-start
+        gap-5
+        overflow-hidden
+        px-4
+        pb-3
+        sm:gap-7
+        md:mx-0
+        md:justify-center
+        md:gap-10
+        md:px-0
+      "
+    >
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div
+          key={index}
+          className="
+            flex
+            shrink-0
+            flex-col
+            items-center
+            gap-2.5
+          "
+        >
+          {/* Circle */}
 
           <Skeleton
-            width={36}
-            height={36}
-            borderRadius={12}
+            circle
+            width={56}
+            height={56}
+          />
+
+          {/* Category name */}
+
+          <Skeleton
+            width={55 + (index % 2) * 15}
+            height={10}
+            borderRadius={5}
           />
         </div>
-      </div>
+      ))}
     </div>
   );
 }

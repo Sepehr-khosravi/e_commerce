@@ -9,16 +9,17 @@ export type ProductSort =
 
 export type SearchProductsOptions = {
   query?: string;
+
   categoryId?: number;
+
   minPrice?: number;
+
   maxPrice?: number;
-  sort?:
-    | "newest"
-    | "oldest"
-    | "price_asc"
-    | "price_desc"
-    | "popular";
-  cursor?: number;
+
+  sort?: ProductSort;
+
+  cursor?: string;
+
   limit?: number;
 
   includeInactive?: boolean;
@@ -31,15 +32,18 @@ export interface ProductPagination {
     };
   }>[];
 
-  nextCursor: number | null;
+  nextCursor: string | null;
+
   hasNextPage: boolean;
 }
 
 export interface CreateProductData {
   title: string;
+
   slug: string;
 
   price: number;
+
   offer?: number | null;
 
   images: string[];
@@ -51,14 +55,17 @@ export interface CreateProductData {
   count?: number;
 
   isFeatured?: boolean;
+
   isActive?: boolean;
 }
 
 export interface UpdateProductData {
   title?: string;
+
   slug?: string;
 
   price?: number;
+
   offer?: number | null;
 
   images?: string[];
@@ -70,5 +77,6 @@ export interface UpdateProductData {
   count?: number;
 
   isFeatured?: boolean;
+
   isActive?: boolean;
 }

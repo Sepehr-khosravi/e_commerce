@@ -57,6 +57,8 @@ model User {
   cart      Cart?
   favorites Favorite[]
   orders    Order[]
+
+  @@index([createdAt])
 }
 
 // ==========================
@@ -204,6 +206,7 @@ model Product {
   @@index([isFeatured])
   @@index([isActive])
   @@index([purchaseCount])
+  @@index([count])
 }
 
 // =========================
@@ -231,6 +234,11 @@ model Order {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@index([paymentStatus, createdAt])
 }
 
 // =========================
@@ -282,6 +290,8 @@ model Payment {
 
   @@index([orderId])
   @@index([status])
+  @@index([paidAt])
+  @@index([status, paidAt])
 }
 
 

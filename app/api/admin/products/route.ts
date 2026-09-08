@@ -16,7 +16,7 @@ import {
 // GET - Admin Products
 // ======================================================
 export async function GET(
-  _request: NextRequest
+  request: NextRequest
 ) {
   try {
     const { response } = await requireAdmin();
@@ -25,11 +25,85 @@ export async function GET(
       return response;
     }
 
-    const products = await getAdminProducts();
+    const searchParams =
+      request.nextUrl.searchParams;
 
-    return NextResponse.json({
-      products,
-    });
+    const query =
+      searchParams.get("q") ?? undefined;
+
+    const categoryIdParam =
+      searchParams.get("categoryId");
+
+    const cursor =
+      searchParams.get("cursor") ?? undefined;
+
+    const limitParam =
+      searchParams.get("limit");
+
+    const sortParam =
+      searchParams.get("sort");
+
+    const categoryId =
+      categoryIdParam
+        ? Number(categoryIdParam)
+        : undefined;
+
+    const limit =
+      limitParam
+        ? Number(limitParam)
+        : 10;
+
+    if (
+      categoryId !== undefined &&
+      (!Number.isInteger(categoryId) ||
+        categoryId <= 0)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Invalid categoryId",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 50
+    ) {
+      return NextResponse.json(
+        {
+          error: "Limit must be between 1 and 50",
+        },
+        { status: 400 }
+      );
+    }
+
+    const allowedSorts = [
+      "newest",
+      "oldest",
+    ] as const;
+
+    type AdminProductSort =
+      (typeof allowedSorts)[number];
+
+    const sort =
+      allowedSorts.includes(
+        sortParam as AdminProductSort
+      )
+        ? (sortParam as AdminProductSort)
+        : "newest";
+
+    const result =
+      await getAdminProducts({
+        query,
+        categoryId,
+        cursor,
+        limit,
+        sort,
+      });
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error(
       "GET /api/admin/products:",
@@ -43,13 +117,10 @@ export async function GET(
             ? error.message
             : "Failed to get products",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
-
 
 // ======================================================
 // POST - Create Product

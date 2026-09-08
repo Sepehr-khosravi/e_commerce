@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
 import AuthShell from "@/components/auth/AuthShell";
 
 export default function LoginPage() {
@@ -18,6 +19,14 @@ export default function LoginPage() {
     event.preventDefault();
 
     setError("");
+
+    const normalizedPhone = phone.trim();
+
+    if (!normalizedPhone) {
+      setError("لطفاً شماره موبایل خود را وارد کنید.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -28,7 +37,7 @@ export default function LoginPage() {
         },
         credentials: "include",
         body: JSON.stringify({
-          phoneNumber : phone,
+          phoneNumber: normalizedPhone,
         }),
       });
 
@@ -36,19 +45,22 @@ export default function LoginPage() {
 
       if (!response.ok) {
         throw new Error(
-          data?.message || "شماره موبایل وارد شده صحیح نیست."
+          data?.message ||
+            data?.error ||
+            "شماره موبایل وارد شده صحیح نیست."
         );
       }
 
-      // OTP page needs the phone number
       router.push(
-        `/verify?phone=${encodeURIComponent(phone)}&mode=login`
+        `/verify?phone=${encodeURIComponent(
+          normalizedPhone
+        )}&mode=login`
       );
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : "خطایی رخ داد."
+          : "خطایی رخ داد. دوباره تلاش کنید."
       );
     } finally {
       setLoading(false);
@@ -57,8 +69,8 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="ورود به حساب"
-      description="شماره موبایل خود را وارد کنید تا کد ورود برای شما ارسال شود."
+      title="خوش آمدید"
+      description="برای ورود به حساب کاربری، شماره موبایل خود را وارد کنید."
     >
       <form
         onSubmit={handleSubmit}
@@ -67,46 +79,69 @@ export default function LoginPage() {
         <div>
           <label
             htmlFor="phone"
-            className="mb-2 block text-sm font-semibold text-neutral-700"
+            className="mb-2.5 block text-sm font-semibold text-neutral-800"
           >
             شماره موبایل
           </label>
 
           <input
             id="phone"
+            name="phone"
             type="tel"
             inputMode="numeric"
+            autoComplete="tel"
             dir="ltr"
             placeholder="09123456789"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 text-sm outline-none transition-all duration-200 placeholder:text-neutral-300 focus:border-black focus:ring-2 focus:ring-black/5"
+            onChange={(event) =>
+              setPhone(
+                event.target.value.replace(/[^\d۰-۹]/g, "")
+              )
+            }
+            className="h-13 w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 text-sm text-neutral-900 outline-none transition-all placeholder:text-neutral-300 focus:border-neutral-900 focus:bg-white focus:ring-4 focus:ring-neutral-900/5"
             required
           />
         </div>
 
         {error && (
-          <p className="rounded-xl bg-red-50 px-4 py-3 text-xs font-medium text-red-600">
-            {error}
-          </p>
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-600"
+          >
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold">
+              !
+            </span>
+
+            <p>{error}</p>
+          </div>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="h-12 w-full rounded-xl bg-black text-sm font-semibold text-white transition-all duration-300 hover:bg-neutral-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-black text-sm font-bold text-white shadow-lg shadow-black/10 transition-all duration-200 hover:bg-neutral-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "در حال ارسال..." : "دریافت کد ورود"}
+          {loading ? (
+            <>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              <span>در حال ارسال کد...</span>
+            </>
+          ) : (
+            "دریافت کد ورود"
+          )}
         </button>
       </form>
 
-      <div className="mt-6 text-center text-sm text-neutral-500">
-        حساب کاربری ندارید؟{" "}
+      <div className="mt-7 border-t border-neutral-100 pt-6 text-center">
+        <p className="text-sm text-neutral-500">
+          حساب کاربری ندارید؟
+        </p>
+
         <Link
           href="/register"
-          className="font-semibold text-black transition-colors hover:text-neutral-500"
+          className="mt-1 inline-block text-sm font-bold text-neutral-950 transition-colors hover:text-neutral-500"
         >
-          ثبت‌نام کنید
+          ساخت حساب جدید
         </Link>
       </div>
     </AuthShell>

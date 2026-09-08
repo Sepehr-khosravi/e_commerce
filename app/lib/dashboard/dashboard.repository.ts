@@ -1,83 +1,131 @@
 import { prisma } from "../prisma";
 
-export async function getDashboardStats() {
+export async function getDashboardRawData() {
   const now = new Date();
 
   const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
 
-  startOfToday.setHours(
-    0,
-    0,
-    0,
-    0
-  );
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
 
-  const startOfMonth = new Date(
+  const startOfCurrentMonth = new Date(
     now.getFullYear(),
     now.getMonth(),
     1
   );
 
+  const startOfNextMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    1
+  );
+
+  const startOfPreviousMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() - 1,
+    1
+  );
+
+  const startOfPreviousMonthEnd = startOfCurrentMonth;
+
   const [
-    totalUsers,
-    totalProducts,
+    totalRevenueResult,
+    todayRevenueResult,
+    currentMonthRevenueResult,
+    previousMonthRevenueResult,
+
     totalOrders,
-
-    pendingOrders,
-    processingOrders,
-    shippedOrders,
-    deliveredOrders,
-    cancelledOrders,
-
     paidOrders,
-    pendingPayments,
+    pendingOrders,
+    cancelledOrders,
+    refundedOrders,
 
-    totalRevenue,
-    todayRevenue,
-    monthRevenue,
+    totalUsers,
+    newUsersThisMonth,
 
-    lowStockProducts,
-    outOfStockProducts,
+    totalProducts,
+    lowStock,
+    outOfStock,
+
+    paidOrderAmountResult,
+
+    currentMonthPayments,
+    previousMonthPayments,
+
+    topProducts,
+
+    orderStatusGroups,
   ] = await Promise.all([
-    prisma.user.count(),
+    // =========================
+    // TOTAL REVENUE
+    // =========================
 
-    prisma.product.count({
+    prisma.payment.aggregate({
+      _sum: {
+        amount: true,
+      },
       where: {
-        isActive: true,
+        status: "PAID",
       },
     }),
+
+    // =========================
+    // TODAY REVENUE
+    // =========================
+
+    prisma.payment.aggregate({
+      _sum: {
+        amount: true,
+      },
+      where: {
+        status: "PAID",
+        paidAt: {
+          gte: startOfToday,
+          lt: startOfTomorrow,
+        },
+      },
+    }),
+
+    // =========================
+    // CURRENT MONTH REVENUE
+    // =========================
+
+    prisma.payment.aggregate({
+      _sum: {
+        amount: true,
+      },
+      where: {
+        status: "PAID",
+        paidAt: {
+          gte: startOfCurrentMonth,
+          lt: startOfNextMonth,
+        },
+      },
+    }),
+
+    // =========================
+    // PREVIOUS MONTH REVENUE
+    // =========================
+
+    prisma.payment.aggregate({
+      _sum: {
+        amount: true,
+      },
+      where: {
+        status: "PAID",
+        paidAt: {
+          gte: startOfPreviousMonth,
+          lt: startOfPreviousMonthEnd,
+        },
+      },
+    }),
+
+    // =========================
+    // ORDERS
+    // =========================
 
     prisma.order.count(),
-
-    prisma.order.count({
-      where: {
-        status: "PENDING",
-      },
-    }),
-
-    prisma.order.count({
-      where: {
-        status: "PROCESSING",
-      },
-    }),
-
-    prisma.order.count({
-      where: {
-        status: "SHIPPED",
-      },
-    }),
-
-    prisma.order.count({
-      where: {
-        status: "DELIVERED",
-      },
-    }),
-
-    prisma.order.count({
-      where: {
-        status: "CANCELLED",
-      },
-    }),
 
     prisma.order.count({
       where: {
@@ -91,253 +139,175 @@ export async function getDashboardStats() {
       },
     }),
 
-    getRevenue(),
-
-    getRevenue({
-      from: startOfToday,
+    prisma.order.count({
+      where: {
+        status: "CANCELLED",
+      },
     }),
 
-    getRevenue({
-      from: startOfMonth,
+    prisma.order.count({
+      where: {
+        paymentStatus: "REFUNDED",
+      },
     }),
+
+    // =========================
+    // USERS
+    // =========================
+
+    prisma.user.count(),
+
+    prisma.user.count({
+      where: {
+        createdAt: {
+          gte: startOfCurrentMonth,
+          lt: startOfNextMonth,
+        },
+      },
+    }),
+
+    // =========================
+    // PRODUCTS
+    // =========================
+
+    prisma.product.count(),
 
     prisma.product.count({
       where: {
-        isActive: true,
         count: {
           gt: 0,
           lte: 5,
         },
+        isActive: true,
       },
     }),
 
     prisma.product.count({
       where: {
-        isActive: true,
-        count: {
-          lte: 0,
+        count: 0,
+      },
+    }),
+
+    // =========================
+    // AVERAGE ORDER VALUE
+    // =========================
+
+    prisma.payment.aggregate({
+      _sum: {
+        amount: true,
+      },
+      _count: {
+        id: true,
+      },
+      where: {
+        status: "PAID",
+      },
+    }),
+
+   
+   // =========================
+   // CURRENT MONTH CHART
+   // =========================
+   
+   prisma.payment.findMany({
+     where: {
+       status: "PAID",
+       paidAt: {
+         gte: startOfCurrentMonth,
+         lt: startOfNextMonth,
+       },
+     },
+     select: {
+       amount: true,
+       paidAt: true,
+     },
+     orderBy: {
+       paidAt: "asc",
+     },
+   }),
+
+  // =========================
+  // PREVIOUS MONTH CHART
+  // =========================
+  
+  prisma.payment.findMany({
+    where: {
+      status: "PAID",
+      paidAt: {
+        gte: startOfPreviousMonth,
+        lt: startOfPreviousMonthEnd,
+      },
+    },
+    select: {
+      amount: true,
+      paidAt: true,
+    },
+    orderBy: {
+      paidAt: "asc",
+    },
+  }),
+
+    // =========================
+    // TOP PRODUCTS
+    // =========================
+
+    prisma.orderItem.findMany({
+      where: {
+        order: {
+          paymentStatus: "PAID",
         },
+      },
+      select: {
+        productId: true,
+        productTitle: true,
+        quantity: true,
+        totalPrice: true,
+      },
+    }),
+
+    // =========================
+    // ORDER STATUS
+    // =========================
+
+    prisma.order.groupBy({
+      by: ["status"],
+      _count: {
+        id: true,
       },
     }),
   ]);
 
   return {
-    totalUsers,
-    totalProducts,
+    startOfCurrentMonth,
+    startOfNextMonth,
+    startOfPreviousMonth,
+    startOfPreviousMonthEnd,
+
+    totalRevenueResult,
+    todayRevenueResult,
+    currentMonthRevenueResult,
+    previousMonthRevenueResult,
+
     totalOrders,
-
-    pendingOrders,
-    processingOrders,
-    shippedOrders,
-    deliveredOrders,
-    cancelledOrders,
-
     paidOrders,
-    pendingPayments,
+    pendingOrders,
+    cancelledOrders,
+    refundedOrders,
 
-    totalRevenue,
-    todayRevenue,
-    monthRevenue,
+    totalUsers,
+    newUsersThisMonth,
 
-    lowStockProducts,
-    outOfStockProducts,
+    totalProducts,
+    lowStock,
+    outOfStock,
+
+    paidOrderAmountResult,
+
+    currentMonthPayments,
+    previousMonthPayments,
+
+    topProducts,
+
+    orderStatusGroups,
   };
-}
-
-/* =========================================================
-   REVENUE
-========================================================= */
-
-async function getRevenue(options?: {
-  from?: Date;
-  to?: Date;
-}) {
-  const orders = await prisma.order.findMany({
-    where: {
-      paymentStatus: "PAID",
-
-      ...(options?.from || options?.to
-        ? {
-            createdAt: {
-              ...(options.from
-                ? {
-                    gte: options.from,
-                  }
-                : {}),
-
-              ...(options.to
-                ? {
-                    lte: options.to,
-                  }
-                : {}),
-            },
-          }
-        : {}),
-    },
-
-    select: {
-      totalPrice: true,
-    },
-  });
-
-  return orders.reduce(
-    (total, order) =>
-      total + Number(order.totalPrice),
-    0
-  );
-}
-
-/* =========================================================
-   RECENT ORDERS
-========================================================= */
-
-export async function getRecentOrders(
-  limit = 10
-) {
-  return prisma.order.findMany({
-    take: limit,
-
-    orderBy: {
-      createdAt: "desc",
-    },
-
-    include: {
-      user: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          phoneNumber: true,
-        },
-      },
-
-      items: {
-        include: {
-          product: {
-            select: {
-              id: true,
-              title: true,
-              images: true,
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-/* =========================================================
-   POPULAR PRODUCTS
-========================================================= */
-
-export async function getPopularProducts(
-  limit = 10
-) {
-  return prisma.product.findMany({
-    where: {
-      isActive: true,
-    },
-
-    take: limit,
-
-    orderBy: {
-      purchaseCount: "desc",
-    },
-
-    include: {
-      category: true,
-    },
-  });
-}
-
-/* =========================================================
-   REVENUE HISTORY
-========================================================= */
-
-export async function getRevenueHistory(
-  days = 30
-) {
-  const safeDays = Math.min(
-    Math.max(days, 1),
-    365
-  );
-
-  const from = new Date();
-
-  from.setDate(
-    from.getDate() - safeDays
-  );
-
-  from.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  const orders =
-    await prisma.order.findMany({
-      where: {
-        paymentStatus: "PAID",
-
-        createdAt: {
-          gte: from,
-        },
-      },
-
-      select: {
-        createdAt: true,
-        totalPrice: true,
-      },
-
-      orderBy: {
-        createdAt: "asc",
-      },
-    });
-
-  const revenueMap =
-    new Map<
-      string,
-      {
-        revenue: number;
-        orders: number;
-      }
-    >();
-
-  for (const order of orders) {
-    const date =
-      order.createdAt
-        .toISOString()
-        .slice(0, 10);
-
-    const current =
-      revenueMap.get(date) ?? {
-        revenue: 0,
-        orders: 0,
-      };
-
-    current.revenue +=
-      Number(order.totalPrice);
-
-    current.orders += 1;
-
-    revenueMap.set(
-      date,
-      current
-    );
-  }
-
-  return Array.from(
-    revenueMap.entries()
-  ).map(
-    ([date, data]) => ({
-      date,
-
-      revenue:
-        data.revenue,
-
-      orders:
-        data.orders,
-    })
-  );
 }

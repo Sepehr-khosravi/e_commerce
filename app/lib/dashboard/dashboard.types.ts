@@ -1,34 +1,52 @@
-export interface DashboardStats {
-  totalUsers: number;
-  totalProducts: number;
-  totalOrders: number;
+export type DashboardChartPoint = {
+  label: string;
+  revenue: number;
+};
 
-  pendingOrders: number;
-  processingOrders: number;
-  shippedOrders: number;
-  deliveredOrders: number;
-  cancelledOrders: number;
+export type DashboardProduct = {
+  id: number;
+  title: string;
+  quantity: number;
+  revenue: number;
+};
 
-  paidOrders: number;
-  pendingPayments: number;
+export type DashboardOrderStatus = {
+  status: string;
+  count: number;
+};
 
+export type DashboardData = {
+  // Revenue
   totalRevenue: number;
   todayRevenue: number;
-  monthRevenue: number;
+  currentMonthRevenue: number;
+  previousMonthRevenue: number;
+  revenueGrowth: number;
 
-  lowStockProducts: number;
-  outOfStockProducts: number;
-}
+  // Orders
+  totalOrders: number;
+  paidOrders: number;
+  pendingOrders: number;
+  cancelledOrders: number;
+  refundedOrders: number;
 
-export interface RevenuePoint {
-  date: string;
-  revenue: number;
-  orders: number;
-}
+  // Sales
+  averageOrderValue: number;
 
-export interface DashboardData {
-  stats: DashboardStats;
-  revenue: RevenuePoint[];
-  recentOrders: unknown[];
-  popularProducts: unknown[];
-}
+  // Users
+  totalUsers: number;
+  newUsersThisMonth: number;
+
+  // Products / inventory
+  totalProducts: number;
+  lowStock: number;
+  outOfStock: number;
+
+  // Charts
+  chart: DashboardChartPoint[];
+  previousMonthChart: DashboardChartPoint[];
+
+  // Extra analytics
+  topProducts: DashboardProduct[];
+  orderStatuses: DashboardOrderStatus[];
+};

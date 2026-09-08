@@ -60,6 +60,31 @@ type FilterContentProps = {
   onClearFilters: () => void;
 };
 
+type FilterPanelProps = {
+  mounted: boolean;
+  active: boolean;
+
+  categories: Category[];
+  categoriesLoading: boolean;
+
+  sort: string;
+  categoryId: number | null;
+
+  minPrice: string;
+  maxPrice: string;
+
+  onClose: () => void;
+
+  onSortChange: (value: string) => void;
+  onCategoryChange: (id: number | null) => void;
+
+  onMinPriceChange: (value: string) => void;
+  onMaxPriceChange: (value: string) => void;
+
+  onApplyPrice: () => void;
+  onClearFilters: () => void;
+};
+
 const LIMIT = 12;
 
 const SORT_OPTIONS = [
@@ -130,7 +155,9 @@ function PriceInput({
           dir="ltr"
           value={value}
           onChange={(event) => {
-            onChange(onlyEnglishDigits(event.target.value));
+            onChange(
+              onlyEnglishDigits(event.target.value)
+            );
           }}
           placeholder={placeholder}
           className="
@@ -176,15 +203,21 @@ function PriceInput({
           transition-all
           duration-200
           ease-out
-          ${formattedValue
-            ? "mt-2 max-h-8 opacity-100"
-            : "mt-0 max-h-0 opacity-0"
+          ${
+            formattedValue
+              ? "mt-2 max-h-8 opacity-100"
+              : "mt-0 max-h-0 opacity-0"
           }
         `}
       >
         <p
           dir="rtl"
-          className="px-1 text-[11px] font-medium text-neutral-400"
+          className="
+            px-1
+            text-[11px]
+            font-medium
+            text-neutral-400
+          "
         >
           {formattedValue} تومان
         </p>
@@ -214,39 +247,48 @@ function FilterContent({
   return (
     <div className="space-y-7">
       {/* SORT */}
+
       <div>
         <p className="mb-3 text-xs font-bold text-black">
           مرتب‌سازی
         </p>
 
         <div className="flex flex-wrap gap-2">
-          {SORT_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onSortChange(option.value)}
-              className={`
-                rounded-xl
-                px-4
-                py-2.5
-                text-xs
-                font-semibold
-                transition-all
-                duration-200
-                ${
-                  sort === option.value
-                    ? "bg-black text-white shadow-sm"
-                    : "bg-white text-neutral-500 hover:bg-neutral-100 hover:text-black"
+          {SORT_OPTIONS.map((option) => {
+            const isActive =
+              sort === option.value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() =>
+                  onSortChange(option.value)
                 }
-              `}
-            >
-              {option.label}
-            </button>
-          ))}
+                className={`
+                  rounded-xl
+                  px-4
+                  py-2.5
+                  text-xs
+                  font-semibold
+                  transition-all
+                  duration-200
+                  ${
+                    isActive
+                      ? "bg-black text-white shadow-sm"
+                      : "bg-white text-neutral-500 hover:bg-neutral-100 hover:text-black"
+                  }
+                `}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* CATEGORY */}
+
       <div>
         <p className="mb-3 text-xs font-bold text-black">
           دسته‌بندی
@@ -254,24 +296,30 @@ function FilterContent({
 
         {categoriesLoading ? (
           <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div
-                key={index}
-                className="
-                  h-10
-                  w-full
-                  animate-pulse
-                  rounded-xl
-                  bg-white
-                "
-              />
-            ))}
+            {Array.from({ length: 4 }).map(
+              (_, index) => (
+                <div
+                  key={index}
+                  className="
+                    h-10
+                    w-full
+                    animate-pulse
+                    rounded-xl
+                    bg-white
+                  "
+                />
+              )
+            )}
           </div>
         ) : (
           <div className="space-y-2">
+            {/* ALL */}
+
             <button
               type="button"
-              onClick={() => onCategoryChange(null)}
+              onClick={() =>
+                onCategoryChange(null)
+              }
               className={`
                 flex
                 w-full
@@ -292,50 +340,66 @@ function FilterContent({
                 }
               `}
             >
-              <span>همه دسته‌بندی‌ها</span>
+              <span>
+                همه دسته‌بندی‌ها
+              </span>
 
               {categoryId === null && (
                 <span>✓</span>
               )}
             </button>
 
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => onCategoryChange(category.id)}
-                className={`
-                  flex
-                  w-full
-                  items-center
-                  justify-between
-                  rounded-xl
-                  px-4
-                  py-3
-                  text-right
-                  text-xs
-                  font-semibold
-                  transition-all
-                  duration-200
-                  ${
-                    categoryId === category.id
-                      ? "bg-black text-white"
-                      : "bg-white text-neutral-600 hover:bg-neutral-100 hover:text-black"
-                  }
-                `}
-              >
-                <span>{category.name}</span>
+            {/* CATEGORIES */}
 
-                {categoryId === category.id && (
-                  <span>✓</span>
-                )}
-              </button>
-            ))}
+            {categories.map((category) => {
+              const isActive =
+                categoryId === category.id;
+
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() =>
+                    onCategoryChange(
+                      category.id
+                    )
+                  }
+                  className={`
+                    flex
+                    w-full
+                    items-center
+                    justify-between
+                    rounded-xl
+                    px-4
+                    py-3
+                    text-right
+                    text-xs
+                    font-semibold
+                    transition-all
+                    duration-200
+                    ${
+                      isActive
+                        ? "bg-black text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-100 hover:text-black"
+                    }
+                  `}
+                >
+                  <span>
+                    {category.name}
+                  </span>
+
+                  {isActive && (
+                    <span>✓</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* PRICE */}
+
       <div>
         <p className="mb-3 text-xs font-bold text-black">
           محدوده قیمت
@@ -378,6 +442,7 @@ function FilterContent({
       </div>
 
       {/* CLEAR */}
+
       <button
         type="button"
         onClick={onClearFilters}
@@ -398,34 +463,8 @@ function FilterContent({
 }
 
 /* =========================================================
-   FILTER DRAWER / BOTTOM SHEET
+   FILTER PANEL
 ========================================================= */
-
-type FilterPanelProps = {
-  open: boolean;
-  mounted: boolean;
-  active: boolean;
-
-  categories: Category[];
-  categoriesLoading: boolean;
-
-  sort: string;
-  categoryId: number | null;
-
-  minPrice: string;
-  maxPrice: string;
-
-  onClose: () => void;
-
-  onSortChange: (value: string) => void;
-  onCategoryChange: (id: number | null) => void;
-
-  onMinPriceChange: (value: string) => void;
-  onMaxPriceChange: (value: string) => void;
-
-  onApplyPrice: () => void;
-  onClearFilters: () => void;
-};
 
 function FilterPanel({
   mounted,
@@ -451,6 +490,7 @@ function FilterPanel({
   return (
     <div className="fixed inset-0 z-50">
       {/* OVERLAY */}
+
       <button
         type="button"
         aria-label="بستن فیلترها"
@@ -463,11 +503,18 @@ function FilterPanel({
           transition-opacity
           duration-300
           ease-out
-          ${active ? "opacity-100" : "opacity-0"}
+          ${
+            active
+              ? "opacity-100"
+              : "opacity-0"
+          }
         `}
       />
 
-      {/* ================= MOBILE ================= */}
+      {/* ===================================================
+          MOBILE BOTTOM SHEET
+      =================================================== */}
+
       <div
         className={`
           absolute
@@ -491,16 +538,49 @@ function FilterPanel({
         `}
       >
         {/* HANDLE */}
-        <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-neutral-300" />
+
+        <div
+          className="
+            mx-auto
+            mb-5
+            h-1.5
+            w-12
+            rounded-full
+            bg-neutral-300
+          "
+        />
 
         {/* HEADER */}
-        <div className="mb-6 flex items-center justify-between">
+
+        <div
+          className="
+            mb-6
+            flex
+            items-center
+            justify-between
+          "
+        >
           <div>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
+            <span
+              className="
+                text-[9px]
+                font-semibold
+                uppercase
+                tracking-[0.2em]
+                text-neutral-400
+              "
+            >
               Filters
             </span>
 
-            <h2 className="mt-1 text-base font-bold text-black">
+            <h2
+              className="
+                mt-1
+                text-base
+                font-bold
+                text-black
+              "
+            >
               فیلتر محصولات
             </h2>
           </div>
@@ -508,6 +588,7 @@ function FilterPanel({
           <button
             type="button"
             onClick={onClose}
+            aria-label="بستن"
             className="
               flex
               h-9
@@ -530,21 +611,34 @@ function FilterPanel({
 
         <FilterContent
           categories={categories}
-          categoriesLoading={categoriesLoading}
+          categoriesLoading={
+            categoriesLoading
+          }
           sort={sort}
           categoryId={categoryId}
           minPrice={minPrice}
           maxPrice={maxPrice}
           onSortChange={onSortChange}
-          onCategoryChange={onCategoryChange}
-          onMinPriceChange={onMinPriceChange}
-          onMaxPriceChange={onMaxPriceChange}
+          onCategoryChange={
+            onCategoryChange
+          }
+          onMinPriceChange={
+            onMinPriceChange
+          }
+          onMaxPriceChange={
+            onMaxPriceChange
+          }
           onApplyPrice={onApplyPrice}
-          onClearFilters={onClearFilters}
+          onClearFilters={
+            onClearFilters
+          }
         />
       </div>
 
-      {/* ================= DESKTOP ================= */}
+      {/* ===================================================
+          DESKTOP RIGHT DRAWER
+      =================================================== */}
+
       <div
         className={`
           absolute
@@ -570,13 +664,36 @@ function FilterPanel({
         `}
       >
         {/* HEADER */}
-        <div className="mb-8 flex items-center justify-between">
+
+        <div
+          className="
+            mb-8
+            flex
+            items-center
+            justify-between
+          "
+        >
           <div>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
+            <span
+              className="
+                text-[10px]
+                font-semibold
+                uppercase
+                tracking-[0.2em]
+                text-neutral-400
+              "
+            >
               Filters
             </span>
 
-            <h2 className="mt-1 text-lg font-bold text-black">
+            <h2
+              className="
+                mt-1
+                text-lg
+                font-bold
+                text-black
+              "
+            >
               فیلترهای بیشتر
             </h2>
           </div>
@@ -584,6 +701,7 @@ function FilterPanel({
           <button
             type="button"
             onClick={onClose}
+            aria-label="بستن"
             className="
               flex
               h-9
@@ -606,17 +724,27 @@ function FilterPanel({
 
         <FilterContent
           categories={categories}
-          categoriesLoading={categoriesLoading}
+          categoriesLoading={
+            categoriesLoading
+          }
           sort={sort}
           categoryId={categoryId}
           minPrice={minPrice}
           maxPrice={maxPrice}
           onSortChange={onSortChange}
-          onCategoryChange={onCategoryChange}
-          onMinPriceChange={onMinPriceChange}
-          onMaxPriceChange={onMaxPriceChange}
+          onCategoryChange={
+            onCategoryChange
+          }
+          onMinPriceChange={
+            onMinPriceChange
+          }
+          onMaxPriceChange={
+            onMaxPriceChange
+          }
           onApplyPrice={onApplyPrice}
-          onClearFilters={onClearFilters}
+          onClearFilters={
+            onClearFilters
+          }
         />
       </div>
     </div>
@@ -624,32 +752,35 @@ function FilterPanel({
 }
 
 /* =========================================================
-   PAGE
+   PRODUCTS PAGE
 ========================================================= */
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  /* =======================================================
+     PRODUCTS
+  ======================================================= */
+
+  const [products, setProducts] =
+    useState<Product[]>([]);
+
+  const [categories, setCategories] =
+    useState<Category[]>([]);
+
+  /* =======================================================
+     FILTERS
+  ======================================================= */
 
   const [categoryId, setCategoryId] =
     useState<number | null>(null);
 
-  const [sort, setSort] = useState("popular");
+  const [sort, setSort] =
+    useState("popular");
 
-  /*
-   * IMPORTANT:
-   * These values are RAW digits.
-   *
-   * Example:
-   * "1500000"
-   *
-   * NOT:
-   * "1,500,000"
-   *
-   * This prevents input caret/focus problems.
-   */
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
+  const [minPrice, setMinPrice] =
+    useState("");
+
+  const [maxPrice, setMaxPrice] =
+    useState("");
 
   const [appliedMinPrice, setAppliedMinPrice] =
     useState("");
@@ -657,7 +788,10 @@ export default function ProductsPage() {
   const [appliedMaxPrice, setAppliedMaxPrice] =
     useState("");
 
-  /* FILTER PANEL */
+  /* =======================================================
+     FILTER PANEL
+  ======================================================= */
+
   const [filtersOpen, setFiltersOpen] =
     useState(false);
 
@@ -667,11 +801,19 @@ export default function ProductsPage() {
   const [filterActive, setFilterActive] =
     useState(false);
 
+  /* =======================================================
+     PAGINATION
+  ======================================================= */
+
   const [cursor, setCursor] =
     useState<number | null>(null);
 
   const [hasNextPage, setHasNextPage] =
     useState(true);
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
 
   const [initialLoading, setInitialLoading] =
     useState(true);
@@ -682,8 +824,34 @@ export default function ProductsPage() {
   const [categoriesLoading, setCategoriesLoading] =
     useState(true);
 
+  /* =======================================================
+     REFS
+  ======================================================= */
+
   const observerRef =
     useRef<HTMLDivElement | null>(null);
+
+  /*
+   * IMPORTANT
+   *
+   * This ref prevents multiple requests
+   * for the same cursor.
+   *
+   * State updates are asynchronous,
+   * but ref updates are immediate.
+   */
+  const loadingMoreRef =
+    useRef(false);
+
+  /*
+   * This keeps track of the cursor currently
+   * being requested.
+   *
+   * It gives us another layer of protection
+   * against duplicate pagination requests.
+   */
+  const requestedCursorRef =
+    useRef<number | null>(null);
 
   /* =======================================================
      CATEGORIES
@@ -715,7 +883,9 @@ export default function ProductsPage() {
           | CategoriesResponse =
           await response.json();
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         if (Array.isArray(data)) {
           setCategories(data);
@@ -757,13 +927,10 @@ export default function ProductsPage() {
     if (filtersOpen) {
       setFilterMounted(true);
 
-      /*
-       * Wait one frame so the browser first renders
-       * the closed state, then transitions to open.
-       */
-      const frame = requestAnimationFrame(() => {
-        setFilterActive(true);
-      });
+      const frame =
+        requestAnimationFrame(() => {
+          setFilterActive(true);
+        });
 
       return () => {
         cancelAnimationFrame(frame);
@@ -772,14 +939,19 @@ export default function ProductsPage() {
 
     setFilterActive(false);
 
-    const timeout = window.setTimeout(() => {
-      setFilterMounted(false);
-    }, 300);
+    const timeout =
+      window.setTimeout(() => {
+        setFilterMounted(false);
+      }, 300);
 
     return () => {
       window.clearTimeout(timeout);
     };
   }, [filtersOpen]);
+
+  /* =======================================================
+     FILTER PANEL ACTIONS
+  ======================================================= */
 
   function openFilters() {
     setFiltersOpen(true);
@@ -799,16 +971,54 @@ export default function ProductsPage() {
       nextCursor: number | null = null,
       replace = false
     ) => {
-      try {
-        if (replace) {
-          setInitialLoading(true);
-        } else {
-          setLoadingMore(true);
+      /*
+       * ===================================================
+       * LOAD MORE LOCK
+       * ===================================================
+       */
+
+      if (!replace) {
+        /*
+         * Another pagination request is already running.
+         */
+        if (loadingMoreRef.current) {
+          return;
         }
 
-        const params = new URLSearchParams();
+        /*
+         * Same cursor is already being requested.
+         */
+        if (
+          requestedCursorRef.current ===
+          nextCursor
+        ) {
+          return;
+        }
 
-        params.set("limit", String(LIMIT));
+        loadingMoreRef.current = true;
+        requestedCursorRef.current =
+          nextCursor;
+
+        setLoadingMore(true);
+      } else {
+        /*
+         * A new filter/sort request starts
+         * a completely new pagination cycle.
+         */
+        requestedCursorRef.current = null;
+
+        setInitialLoading(true);
+      }
+
+      try {
+        const params =
+          new URLSearchParams();
+
+        params.set(
+          "limit",
+          String(LIMIT)
+        );
+
         params.set("sort", sort);
 
         if (categoryId !== null) {
@@ -847,7 +1057,8 @@ export default function ProductsPage() {
           }
         );
 
-        const text = await response.text();
+        const text =
+          await response.text();
 
         let data:
           | ProductResponse
@@ -875,25 +1086,97 @@ export default function ProductsPage() {
           data as ProductResponse;
 
         const incomingProducts =
-          Array.isArray(result.products)
+          Array.isArray(
+            result.products
+          )
             ? result.products
             : [];
 
-        setProducts((current) =>
-          replace
-            ? incomingProducts
-            : [
-                ...current,
-                ...incomingProducts,
-              ]
-        );
+        /*
+         * =================================================
+         * UPDATE PRODUCTS
+         * =================================================
+         */
+
+        setProducts((current) => {
+          /*
+           * First page / filter change.
+           */
+          if (replace) {
+            /*
+             * Even the initial response can theoretically
+             * contain duplicate IDs, so clean it here too.
+             */
+            const unique =
+              new Map<number, Product>();
+
+            for (const product of incomingProducts) {
+              unique.set(
+                product.id,
+                product
+              );
+            }
+
+            return Array.from(
+              unique.values()
+            );
+          }
+
+          /*
+           * Infinite scroll.
+           *
+           * Create a Set containing IDs already rendered.
+           */
+          const existingIds =
+            new Set(
+              current.map(
+                (product) =>
+                  product.id
+              )
+            );
+
+          /*
+           * Only append products that don't already exist.
+           */
+          const uniqueIncoming =
+            incomingProducts.filter(
+              (product) => {
+                if (
+                  existingIds.has(
+                    product.id
+                  )
+                ) {
+                  return false;
+                }
+
+                existingIds.add(
+                  product.id
+                );
+
+                return true;
+              }
+            );
+
+          return [
+            ...current,
+            ...uniqueIncoming,
+          ];
+        });
+
+        /*
+         * =================================================
+         * UPDATE PAGINATION
+         * =================================================
+         */
 
         setCursor(
           result.nextCursor ?? null
         );
 
         setHasNextPage(
-          Boolean(result.hasNextPage)
+          Boolean(
+            result.hasNextPage
+          )
         );
       } catch (error) {
         console.error(
@@ -901,14 +1184,33 @@ export default function ProductsPage() {
           error
         );
 
+        /*
+         * Only clear products on initial load.
+         *
+         * If load-more fails, keep the products
+         * already displayed.
+         */
         if (replace) {
           setProducts([]);
         }
 
+        /*
+         * Stop infinite scroll after an error
+         * instead of repeatedly hammering the API.
+         */
         setHasNextPage(false);
       } finally {
-        setInitialLoading(false);
-        setLoadingMore(false);
+        if (replace) {
+          setInitialLoading(false);
+        } else {
+          loadingMoreRef.current =
+            false;
+
+          requestedCursorRef.current =
+            null;
+
+          setLoadingMore(false);
+        }
       }
     },
     [
@@ -920,13 +1222,25 @@ export default function ProductsPage() {
   );
 
   /* =======================================================
-     RESET / FETCH ON FILTER CHANGE
+     RESET PAGINATION WHEN FILTERS CHANGE
   ======================================================= */
 
   useEffect(() => {
+    /*
+     * Reset pagination.
+     */
     setCursor(null);
     setHasNextPage(true);
 
+    /*
+     * Reset request locks.
+     */
+    loadingMoreRef.current = false;
+    requestedCursorRef.current = null;
+
+    /*
+     * Load first page.
+     */
     fetchProducts(null, true);
   }, [
     categoryId,
@@ -941,15 +1255,36 @@ export default function ProductsPage() {
   ======================================================= */
 
   useEffect(() => {
-    const element = observerRef.current;
+    const element =
+      observerRef.current;
 
-    if (
-      !element ||
-      !hasNextPage ||
-      loadingMore ||
-      initialLoading ||
-      cursor === null
-    ) {
+    /*
+     * Nothing to observe yet.
+     */
+    if (!element) {
+      return;
+    }
+
+    /*
+     * No more products.
+     */
+    if (!hasNextPage) {
+      return;
+    }
+
+    /*
+     * Initial page is still loading.
+     */
+    if (initialLoading) {
+      return;
+    }
+
+    /*
+     * We don't have a cursor.
+     *
+     * This normally means there is no next page.
+     */
+    if (cursor === null) {
       return;
     }
 
@@ -960,16 +1295,34 @@ export default function ProductsPage() {
             entries[0];
 
           if (
-            firstEntry?.isIntersecting
+            !firstEntry?.isIntersecting
           ) {
-            fetchProducts(
-              cursor,
-              false
-            );
+            return;
           }
+
+          /*
+           * Another request is already running.
+           */
+          if (
+            loadingMoreRef.current
+          ) {
+            return;
+          }
+
+          /*
+           * Request the current cursor.
+           */
+          fetchProducts(
+            cursor,
+            false
+          );
         },
         {
-          rootMargin: "500px",
+          /*
+           * Start loading before the user
+           * reaches the absolute bottom.
+           */
+          rootMargin: "500px 0px",
         }
       );
 
@@ -981,7 +1334,6 @@ export default function ProductsPage() {
   }, [
     cursor,
     hasNextPage,
-    loadingMore,
     initialLoading,
     fetchProducts,
   ]);
@@ -991,12 +1343,18 @@ export default function ProductsPage() {
   ======================================================= */
 
   function applyPrice() {
+    const nextMinPrice =
+      onlyEnglishDigits(minPrice);
+
+    const nextMaxPrice =
+      onlyEnglishDigits(maxPrice);
+
     setAppliedMinPrice(
-      onlyEnglishDigits(minPrice)
+      nextMinPrice
     );
 
     setAppliedMaxPrice(
-      onlyEnglishDigits(maxPrice)
+      nextMaxPrice
     );
 
     closeFilters();
@@ -1022,7 +1380,9 @@ export default function ProductsPage() {
     setCategoryId(id);
   }
 
-  function selectSort(value: string) {
+  function selectSort(
+    value: string
+  ) {
     setSort(value);
   }
 
@@ -1030,7 +1390,8 @@ export default function ProductsPage() {
     SORT_OPTIONS.find(
       (item) =>
         item.value === sort
-    )?.label ?? "محبوب‌ترین";
+    )?.label ??
+    "محبوب‌ترین";
 
   /* =======================================================
      RENDER
@@ -1039,7 +1400,10 @@ export default function ProductsPage() {
   return (
     <main
       dir="rtl"
-      className="min-h-screen bg-white"
+      className="
+        min-h-screen
+        bg-white
+      "
     >
       {/* ===================================================
           HEADER
@@ -1108,8 +1472,8 @@ export default function ProductsPage() {
           mx-auto
           max-w-7xl
           px-5
-          md:hidden
           sm:px-6
+          md:hidden
           lg:px-8
         "
       >
@@ -1161,7 +1525,7 @@ export default function ProductsPage() {
       </section>
 
       {/* ===================================================
-          PRODUCTS
+          PRODUCTS SECTION
       =================================================== */}
 
       <section
@@ -1236,7 +1600,9 @@ export default function ProductsPage() {
                 categoryId={categoryId}
                 minPrice={minPrice}
                 maxPrice={maxPrice}
-                onSortChange={selectSort}
+                onSortChange={
+                  selectSort
+                }
                 onCategoryChange={
                   selectCategory
                 }
@@ -1321,7 +1687,9 @@ export default function ProductsPage() {
               </button>
             </div>
 
-            {/* INITIAL LOADING */}
+            {/* =================================================
+                INITIAL LOADING
+            ================================================= */}
 
             {initialLoading ? (
               <div
@@ -1337,12 +1705,14 @@ export default function ProductsPage() {
                   length: 8,
                 }).map((_, index) => (
                   <ProductSkeleton
-                    key={index}
+                    key={`initial-skeleton-${index}`}
                   />
                 ))}
               </div>
             ) : products.length === 0 ? (
-              /* EMPTY */
+              /* =================================================
+                 EMPTY STATE
+              ================================================= */
 
               <div
                 className="
@@ -1416,7 +1786,9 @@ export default function ProductsPage() {
               </div>
             ) : (
               <>
-                {/* PRODUCTS GRID */}
+                {/* =================================================
+                    PRODUCTS GRID
+                ================================================= */}
 
                 <div
                   className="
@@ -1437,7 +1809,9 @@ export default function ProductsPage() {
                   )}
                 </div>
 
-                {/* INFINITE SCROLL */}
+                {/* =================================================
+                    INFINITE SCROLL SENTINEL
+                ================================================= */}
 
                 {hasNextPage && (
                   <div
@@ -1457,12 +1831,16 @@ export default function ProductsPage() {
                       }).map(
                         (_, index) => (
                           <ProductSkeleton
-                            key={index}
+                            key={`loading-skeleton-${index}`}
                           />
                         )
                       )}
                   </div>
                 )}
+
+                {/* =================================================
+                    END OF PRODUCTS
+                ================================================= */}
 
                 {!hasNextPage && (
                   <div
@@ -1494,7 +1872,6 @@ export default function ProductsPage() {
       =================================================== */}
 
       <FilterPanel
-        open={filtersOpen}
         mounted={filterMounted}
         active={filterActive}
         categories={categories}

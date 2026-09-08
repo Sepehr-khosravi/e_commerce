@@ -143,7 +143,17 @@ export async function findOrdersByUser(
         : {}),
 
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                title: true,
+                images: true,
+              },
+            },
+          },
+        },
       },
     });
 
