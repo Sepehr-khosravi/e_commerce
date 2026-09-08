@@ -84,12 +84,6 @@ export default function ProductPage({
   const [error, setError] =
     useState<string | null>(null);
 
-  /*
-   * ============================================================
-   * FAVORITES
-   * ============================================================
-   */
-
   const [isFavorite, setIsFavorite] =
     useState(false);
 
@@ -100,17 +94,18 @@ export default function ProductPage({
     useState(false);
 
   /*
-   * Load product
+   * ============================================================
+   * LOAD PRODUCT
+   * ============================================================
    */
+
   useEffect(() => {
     async function loadProduct() {
       try {
         const { id } = await params;
 
         if (!/^\d+$/.test(id)) {
-          setError(
-            "شناسه محصول نامعتبر است."
-          );
+          setError("شناسه محصول نامعتبر است.");
           return;
         }
 
@@ -156,33 +151,19 @@ export default function ProductPage({
    * ============================================================
    * LOAD FAVORITE STATUS
    * ============================================================
-   *
-   * GET /api/favorites
-   *
-   * We don't make the product page fail if the user
-   * is not authenticated.
    */
-  /*
-   * ============================================================
-   * LOAD FAVORITE STATUS
-   * ============================================================
-   *
-   * GET /api/favorites/[productId]
-   *
-   * Only checks the current product instead of
-   * downloading the user's entire favorites list.
-   */
+
   useEffect(() => {
     async function loadFavoriteStatus() {
       try {
         const { id } = await params;
-  
+
         if (!/^\d+$/.test(id)) {
           return;
         }
-  
+
         const productId = Number(id);
-  
+
         const response = await fetch(
           `/api/favorites/${productId}`,
           {
@@ -190,35 +171,31 @@ export default function ProductPage({
             cache: "no-store",
           }
         );
-  
-        /*
-         * Favorites require authentication.
-         *
-         * If the user is not authenticated,
-         * don't make the product page fail.
-         */
+
         if (!response.ok) {
           setIsFavorite(false);
           return;
         }
-  
+
         const data: {
           favorite?: boolean;
         } = await response.json();
-  
-        setIsFavorite(data.favorite === true);
+
+        setIsFavorite(
+          data.favorite === true
+        );
       } catch (error) {
         console.error(
           "Load favorite status error:",
           error
         );
-  
+
         setIsFavorite(false);
       } finally {
         setFavoriteChecked(true);
       }
     }
-  
+
     loadFavoriteStatus();
   }, [params]);
 
@@ -227,14 +204,15 @@ export default function ProductPage({
    * TOGGLE FAVORITE
    * ============================================================
    */
+
   async function toggleFavorite() {
     if (!product || favoriteLoading) {
       return;
     }
-  
+
     try {
       setFavoriteLoading(true);
-  
+
       if (!isFavorite) {
         const response = await fetch(
           "/api/favorites",
@@ -248,24 +226,25 @@ export default function ProductPage({
             }),
           }
         );
-  
+
         if (!response.ok) {
           let message =
             "خطا در افزودن محصول به علاقه‌مندی‌ها";
-  
+
           try {
-            const data = await response.json();
-  
+            const data =
+              await response.json();
+
             if (data?.error) {
               message = data.error;
             }
           } catch {
-            // Response has no JSON body.
+            // No JSON response.
           }
-  
+
           throw new Error(message);
         }
-  
+
         setIsFavorite(true);
       } else {
         const response = await fetch(
@@ -274,24 +253,25 @@ export default function ProductPage({
             method: "DELETE",
           }
         );
-  
+
         if (!response.ok) {
           let message =
             "خطا در حذف محصول از علاقه‌مندی‌ها";
-  
+
           try {
-            const data = await response.json();
-  
+            const data =
+              await response.json();
+
             if (data?.error) {
               message = data.error;
             }
           } catch {
-            // Response has no JSON body.
+            // No JSON response.
           }
-  
+
           throw new Error(message);
         }
-  
+
         setIsFavorite(false);
       }
     } catch (error) {
@@ -299,7 +279,7 @@ export default function ProductPage({
         "Toggle favorite error:",
         error
       );
-  
+
       alert(
         error instanceof Error
           ? error.message
@@ -309,6 +289,13 @@ export default function ProductPage({
       setFavoriteLoading(false);
     }
   }
+
+  /*
+   * ============================================================
+   * STATES
+   * ============================================================
+   */
+
   if (loading) {
     return <ProductPageSkeleton />;
   }
@@ -317,9 +304,9 @@ export default function ProductPage({
     return (
       <main
         dir="rtl"
-        className="flex min-h-screen items-center justify-center bg-white px-5"
+        className="flex min-h-[calc(100svh-64px)] items-center justify-center bg-white px-5"
       >
-        <div className="text-center">
+        <div className="w-full max-w-md text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100">
             <Package
               size={24}
@@ -368,61 +355,90 @@ export default function ProductPage({
   return (
     <main
       dir="rtl"
-      className="min-h-screen bg-white"
+      className={`
+        min-h-screen
+        bg-white
+        ${
+          available
+            ? "pb-28 lg:pb-0"
+            : ""
+        }
+      `}
     >
-      <div className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
 
-        {/* Breadcrumb */}
-        <div className="mb-8 flex items-center gap-2 text-xs text-neutral-400">
+        {/* ======================================================
+            BREADCRUMB
+        ====================================================== */}
+
+        <div className="mb-6 flex items-center gap-1.5 overflow-hidden text-[11px] text-neutral-400 sm:mb-8 sm:gap-2 sm:text-xs">
           <Link
             href="/"
-            className="transition hover:text-black"
+            className="shrink-0 transition hover:text-black"
           >
             خانه
           </Link>
 
-          <ChevronLeft size={13} />
+          <ChevronLeft
+            size={13}
+            className="shrink-0"
+          />
 
           <Link
             href="/products"
-            className="transition hover:text-black"
+            className="shrink-0 transition hover:text-black"
           >
             محصولات
           </Link>
 
-          <ChevronLeft size={13} />
+          <ChevronLeft
+            size={13}
+            className="shrink-0"
+          />
 
-          <span className="max-w-48 truncate text-neutral-600">
+          <span className="min-w-0 truncate text-neutral-600">
             {product.title}
           </span>
         </div>
 
-        {/* Main Product */}
-        <section className="grid gap-8 lg:grid-cols-2 lg:gap-14">
+        {/* ======================================================
+            PRODUCT
+        ====================================================== */}
 
-          {/* Images */}
+        <section className="grid gap-7 sm:gap-10 lg:grid-cols-2 lg:gap-14">
+
+          {/* ====================================================
+              IMAGE GALLERY
+          ==================================================== */}
+
           <ProductImageGallery
             images={product.images}
             title={product.title}
             isFeatured={product.isFeatured}
           />
 
-          {/* Information */}
-          <div className="flex flex-col justify-center">
+          {/* ====================================================
+              INFORMATION
+          ==================================================== */}
 
-            <div className="flex items-start justify-between gap-5">
+          <div className="flex min-w-0 flex-col justify-center">
 
-              <div className="min-w-0">
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+
+              <div className="min-w-0 flex-1">
+
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 sm:text-xs">
                   Product
                 </span>
 
-                <h1 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-black sm:text-4xl lg:text-5xl">
+                <h1 className="mt-2 text-2xl font-bold leading-[1.35] tracking-tight text-black sm:text-3xl lg:text-4xl xl:text-5xl">
                   {product.title}
                 </h1>
+
               </div>
 
-              {/* Favorite Button */}
+              {/* Favorite */}
               <button
                 type="button"
                 onClick={toggleFavorite}
@@ -437,92 +453,89 @@ export default function ProductPage({
                 }
                 aria-pressed={isFavorite}
                 className={`
-                  group
-                  mt-1
                   flex
-                  h-12
-                  w-12
+                  h-11
+                  w-11
                   shrink-0
                   items-center
                   justify-center
                   rounded-2xl
                   border
                   transition-all
-                  duration-300
+                  duration-200
                   disabled:cursor-not-allowed
                   disabled:opacity-50
+                  sm:h-12
+                  sm:w-12
                   ${
                     isFavorite
                       ? "border-black bg-black text-white"
-                      : "border-neutral-200 bg-white text-black hover:border-black hover:bg-black hover:text-white"
+                      : "border-neutral-200 bg-white text-black hover:border-black"
                   }
                 `}
               >
                 <Heart
-                  size={20}
+                  size={19}
                   strokeWidth={1.8}
                   fill={
                     isFavorite
                       ? "currentColor"
                       : "none"
                   }
-                  className={`
-                    transition-transform
-                    duration-300
-                    ${
-                      favoriteLoading
-                        ? "animate-pulse"
-                        : "group-hover:scale-110"
-                    }
-                  `}
+                  className={
+                    favoriteLoading
+                      ? "animate-pulse"
+                      : ""
+                  }
                 />
               </button>
-
             </div>
 
-            {/* Favorite Status */}
-            {favoriteChecked && isFavorite && (
-              <div className="mt-4 flex items-center gap-2 text-xs font-medium text-neutral-500">
-                <Heart
-                  size={13}
-                  fill="currentColor"
-                  className="text-black"
-                />
+            {/* Favorite status */}
+            {favoriteChecked &&
+              isFavorite && (
+                <div className="mt-3 flex items-center gap-2 text-xs font-medium text-neutral-500">
+                  <Heart
+                    size={13}
+                    fill="currentColor"
+                    className="text-black"
+                  />
 
-                این محصول در علاقه‌مندی‌های شماست
-              </div>
-            )}
+                  این محصول در علاقه‌مندی‌های شماست
+                </div>
+              )}
 
-            {/* Price */}
-            <div className="mt-8 border-y border-neutral-100 py-6">
+            {/* ==================================================
+                PRICE
+            ================================================== */}
+
+            <div className="mt-6 border-y border-neutral-100 py-5 sm:mt-8 sm:py-6">
 
               {hasOffer ? (
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
 
-                  {/* Final Price */}
-                  <span className="text-3xl font-bold text-black">
+                  <span className="text-2xl font-bold text-black sm:text-3xl">
                     {formatPrice(finalPrice)}
 
-                    <span className="mr-1 text-sm font-medium text-neutral-400">
+                    <span className="mr-1 text-xs font-medium text-neutral-400 sm:text-sm">
                       تومان
                     </span>
                   </span>
 
-                  {/* Original Price */}
-                  <span className="text-sm text-neutral-400 line-through">
+                  <span className="text-xs text-neutral-400 line-through sm:text-sm">
                     {formatPrice(price)}
                   </span>
 
-                  {/* Discount */}
-                  <span className="rounded-full bg-black px-2.5 py-1 text-[10px] font-bold text-white">
+                  <span className="rounded-full bg-black px-2.5 py-1 text-[9px] font-bold text-white sm:text-[10px]">
                     {discount}٪ تخفیف
                   </span>
+
                 </div>
               ) : (
-                <span className="text-3xl font-bold text-black">
+                <span className="text-2xl font-bold text-black sm:text-3xl">
                   {formatPrice(price)}
 
-                  <span className="mr-1 text-sm font-medium text-neutral-400">
+                  <span className="mr-1 text-xs font-medium text-neutral-400 sm:text-sm">
                     تومان
                   </span>
                 </span>
@@ -530,19 +543,22 @@ export default function ProductPage({
 
             </div>
 
-            {/* Stock */}
-            <div className="mt-5 flex flex-wrap gap-3">
+            {/* ==================================================
+                STOCK + SHIPPING
+            ================================================== */}
 
-              <div className="flex items-center gap-2 rounded-xl bg-neutral-50 px-4 py-3">
+            <div className="mt-4 grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:gap-3">
+
+              <div className="flex items-center gap-2 rounded-xl bg-neutral-50 px-3 py-3 sm:px-4">
                 <span
-                  className={`h-2 w-2 rounded-full ${
+                  className={`h-2 w-2 shrink-0 rounded-full ${
                     available
                       ? "bg-black"
                       : "bg-neutral-300"
                   }`}
                 />
 
-                <span className="text-xs font-semibold text-neutral-600">
+                <span className="truncate text-[10px] font-semibold text-neutral-600 sm:text-xs">
                   {available
                     ? `موجود — ${formatPrice(
                         product.count
@@ -551,29 +567,35 @@ export default function ProductPage({
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl bg-neutral-50 px-4 py-3">
+              <div className="flex items-center gap-2 rounded-xl bg-neutral-50 px-3 py-3 sm:px-4">
                 <Truck
                   size={14}
-                  className="text-neutral-400"
+                  className="shrink-0 text-neutral-400"
                 />
 
-                <span className="text-xs font-semibold text-neutral-600">
+                <span className="truncate text-[10px] font-semibold text-neutral-600 sm:text-xs">
                   ارسال سریع
                 </span>
               </div>
 
             </div>
 
-            {/* Add to cart */}
-            <div className="mt-5">
+            {/* ==================================================
+                DESKTOP ADD TO CART
+            ================================================== */}
+
+            <div className="mt-5 hidden lg:block">
               <AddToCart
                 productId={product.id}
                 productCount={product.count}
               />
             </div>
 
-            {/* Info Cards */}
-            <div className="mt-7 grid grid-cols-2 gap-3">
+            {/* ==================================================
+                INFO CARDS
+            ================================================== */}
+
+            <div className="mt-6 grid grid-cols-2 gap-2.5 sm:mt-7 sm:gap-3">
 
               <InfoCard
                 icon={<Package size={16} />}
@@ -588,34 +610,94 @@ export default function ProductPage({
               />
 
             </div>
-
           </div>
         </section>
 
-        {/* Description */}
-        <section className="mt-16 border-t border-neutral-100 pt-10">
+        {/* ======================================================
+            DESCRIPTION
+        ====================================================== */}
 
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
+        <section className="mt-12 border-t border-neutral-100 pt-8 sm:mt-16 sm:pt-10">
+
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 sm:text-xs">
             Details
           </span>
 
-          <h2 className="mt-2 text-xl font-bold text-black">
+          <h2 className="mt-2 text-lg font-bold text-black sm:text-xl">
             درباره محصول
           </h2>
 
-          <p className="mt-5 max-w-4xl whitespace-pre-line text-sm leading-8 text-neutral-500">
+          <p className="mt-4 max-w-4xl whitespace-pre-line text-sm leading-7 text-neutral-500 sm:mt-5 sm:leading-8">
             {product.description}
           </p>
 
         </section>
 
-        {/* Related Products */}
+        {/* ======================================================
+            RELATED PRODUCTS
+        ====================================================== */}
+
         <RelatedProducts
           categoryId={product.categoryId}
           currentProductId={product.id}
         />
-
       </div>
+
+      {/* ========================================================
+          MOBILE FIXED ADD TO CART
+          ======================================================== */}
+
+      {available && (
+        <div
+          className="
+            fixed
+            inset-x-0
+            bottom-0
+            z-[100]
+            border-t
+            border-neutral-200
+            bg-white/95
+            px-3
+            pt-3
+            shadow-[0_-10px_35px_-20px_rgba(0,0,0,0.3)]
+            backdrop-blur-xl
+            lg:hidden
+          "
+          style={{
+            paddingBottom:
+              "calc(0.75rem + env(safe-area-inset-bottom))",
+          }}
+        >
+          <div className="mx-auto flex w-full max-w-2xl items-center gap-3">
+
+            {/* Price */}
+            <div className="min-w-0 shrink-0">
+              <p className="text-[9px] font-medium text-neutral-400">
+                قیمت نهایی
+              </p>
+
+              <div className="mt-0.5 flex items-baseline gap-1">
+                <span className="text-base font-black text-black sm:text-lg">
+                  {formatPrice(finalPrice)}
+                </span>
+
+                <span className="text-[9px] font-medium text-neutral-400">
+                  تومان
+                </span>
+              </div>
+            </div>
+
+            {/* Cart */}
+            <div className="min-w-0 flex-1">
+              <AddToCart
+                productId={product.id}
+                productCount={product.count}
+              />
+            </div>
+
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -672,7 +754,12 @@ function ProductImageGallery({
   function handlePointerDown(
     event: React.PointerEvent<HTMLDivElement>
   ) {
-    if (!hasImages || imageCount <= 1) return;
+    if (
+      !hasImages ||
+      imageCount <= 1
+    ) {
+      return;
+    }
 
     startX.current = event.clientX;
     currentX.current = event.clientX;
@@ -693,7 +780,8 @@ function ProductImageGallery({
     currentX.current = event.clientX;
 
     dragDistance.current =
-      currentX.current - startX.current;
+      currentX.current -
+      startX.current;
   }
 
   function handlePointerUp() {
@@ -701,10 +789,14 @@ function ProductImageGallery({
 
     setIsDragging(false);
 
-    const distance = dragDistance.current;
+    const distance =
+      dragDistance.current;
+
     const threshold = 50;
 
-    if (Math.abs(distance) >= threshold) {
+    if (
+      Math.abs(distance) >= threshold
+    ) {
       if (distance < 0) {
         nextImage();
       } else {
@@ -722,13 +814,13 @@ function ProductImageGallery({
 
   if (!hasImages) {
     return (
-      <div className="relative aspect-square overflow-hidden rounded-[28px] bg-neutral-50">
+      <div className="relative aspect-square overflow-hidden rounded-2xl bg-neutral-50 sm:rounded-[28px]">
         <div className="flex h-full items-center justify-center">
-          <div className="h-40 w-40 animate-pulse rounded-[28px] bg-neutral-200 sm:h-56 sm:w-56" />
+          <div className="h-32 w-32 animate-pulse rounded-2xl bg-neutral-200 sm:h-56 sm:w-56 sm:rounded-[28px]" />
         </div>
 
         {isFeatured && (
-          <span className="absolute right-5 top-5 rounded-full bg-black px-3 py-1.5 text-[10px] font-bold text-white">
+          <span className="absolute right-4 top-4 rounded-full bg-black px-3 py-1.5 text-[9px] font-bold text-white sm:right-5 sm:top-5 sm:text-[10px]">
             محصول منتخب
           </span>
         )}
@@ -737,17 +829,19 @@ function ProductImageGallery({
   }
 
   return (
-    <div>
-      {/* Main Image */}
+    <div className="min-w-0">
+
+      {/* Main image */}
       <div
         className={`
           relative
           aspect-square
           overflow-hidden
-          rounded-[28px]
+          rounded-2xl
           bg-neutral-50
           select-none
           touch-pan-y
+          sm:rounded-[28px]
           ${
             isDragging
               ? "cursor-grabbing"
@@ -757,7 +851,9 @@ function ProductImageGallery({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
+        onPointerCancel={
+          handlePointerCancel
+        }
       >
         <img
           key={`${currentIndex}-${images[currentIndex]}`}
@@ -781,146 +877,129 @@ function ProductImageGallery({
           `}
         />
 
+        {/* Featured */}
         {isFeatured && (
-          <span className="absolute right-5 top-5 rounded-full bg-black px-3 py-1.5 text-[10px] font-bold text-white">
+          <span className="absolute right-4 top-4 rounded-full bg-black px-3 py-1.5 text-[9px] font-bold text-white sm:right-5 sm:top-5 sm:text-[10px]">
             محصول منتخب
           </span>
         )}
 
-        {/* Left arrow */}
+        {/* Arrows */}
         {imageCount > 1 && (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              previousImage();
-            }}
-            aria-label="تصویر قبلی"
-            className="
-              absolute
-              left-4
-              top-1/2
-              flex
-              h-10
-              w-10
-              -translate-y-1/2
-              items-center
-              justify-center
-              rounded-full
-              bg-white/90
-              text-black
-              shadow-sm
-              backdrop-blur
-              transition
-              hover:bg-white
-              active:scale-95
-            "
-          >
-            <ChevronLeft size={18} />
-          </button>
-        )}
+          <>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                previousImage();
+              }}
+              aria-label="تصویر قبلی"
+              className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black shadow-sm backdrop-blur transition hover:bg-white active:scale-95 sm:left-4 sm:h-10 sm:w-10"
+            >
+              <ChevronLeft size={17} />
+            </button>
 
-        {/* Right arrow */}
-        {imageCount > 1 && (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              nextImage();
-            }}
-            aria-label="تصویر بعدی"
-            className="
-              absolute
-              right-4
-              top-1/2
-              flex
-              h-10
-              w-10
-              -translate-y-1/2
-              rotate-180
-              items-center
-              justify-center
-              rounded-full
-              bg-white/90
-              text-black
-              shadow-sm
-              backdrop-blur
-              transition
-              hover:bg-white
-              active:scale-95
-            "
-          >
-            <ChevronLeft size={18} />
-          </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                nextImage();
+              }}
+              aria-label="تصویر بعدی"
+              className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 rotate-180 items-center justify-center rounded-full bg-white/90 text-black shadow-sm backdrop-blur transition hover:bg-white active:scale-95 sm:right-4 sm:h-10 sm:w-10"
+            >
+              <ChevronLeft size={17} />
+            </button>
+          </>
         )}
       </div>
 
       {/* Thumbnails */}
       {imageCount > 1 && (
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-          {images.map((image, index) => (
-            <button
-              key={`${image}-${index}`}
-              type="button"
-              onClick={() => goTo(index)}
-              className={`
-                relative
-                h-20
-                w-20
-                shrink-0
-                overflow-hidden
-                rounded-xl
-                bg-neutral-50
-                transition
-                ${
-                  index === currentIndex
-                    ? "ring-2 ring-black ring-offset-2"
-                    : "opacity-60 hover:opacity-100"
+        <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 sm:mt-4 sm:gap-3">
+          {images.map(
+            (image, index) => (
+              <button
+                key={`${image}-${index}`}
+                type="button"
+                onClick={() =>
+                  goTo(index)
                 }
-              `}
-            >
-              <img
-                src={normalizeImageUrl(image)}
-                alt={`${title} - تصویر ${
-                  index + 1
-                }`}
-                draggable={false}
-                className="h-full w-full object-contain"
-              />
-            </button>
-          ))}
+                className={`
+                  relative
+                  h-16
+                  w-16
+                  shrink-0
+                  overflow-hidden
+                  rounded-xl
+                  bg-neutral-50
+                  transition
+                  sm:h-20
+                  sm:w-20
+                  ${
+                    index ===
+                    currentIndex
+                      ? "ring-2 ring-black ring-offset-2"
+                      : "opacity-60 hover:opacity-100"
+                  }
+                `}
+              >
+                <img
+                  src={normalizeImageUrl(
+                    image
+                  )}
+                  alt={`${title} - تصویر ${
+                    index + 1
+                  }`}
+                  draggable={false}
+                  className="h-full w-full object-contain"
+                />
+              </button>
+            )
+          )}
         </div>
       )}
 
       {/* Dots */}
       {imageCount > 1 && (
-        <div className="mt-4 flex items-center justify-center gap-1.5">
-          {images.map((_, index) => (
-            <button
-              key={index}
-              type="button"
-              onClick={() => goTo(index)}
-              aria-label={`رفتن به تصویر ${
-                index + 1
-              }`}
-              className={`
-                h-1.5
-                rounded-full
-                transition-all
-                duration-300
-                ${
-                  index === currentIndex
-                    ? "w-6 bg-black"
-                    : "w-1.5 bg-neutral-300"
+        <div className="mt-3 flex items-center justify-center gap-1.5 sm:mt-4">
+          {images.map(
+            (_, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() =>
+                  goTo(index)
                 }
-              `}
-            />
-          ))}
+                aria-label={`رفتن به تصویر ${
+                  index + 1
+                }`}
+                className={`
+                  h-1.5
+                  rounded-full
+                  transition-all
+                  duration-300
+                  ${
+                    index ===
+                    currentIndex
+                      ? "w-6 bg-black"
+                      : "w-1.5 bg-neutral-300"
+                  }
+                `}
+              />
+            )
+          )}
         </div>
       )}
     </div>
   );
 }
+
+/*
+ * ============================================================
+ * INFO CARD
+ * ============================================================
+ */
 
 function InfoCard({
   icon,
@@ -932,21 +1011,27 @@ function InfoCard({
   description: string;
 }) {
   return (
-    <div className="rounded-2xl border border-neutral-100 p-4">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-black">
+    <div className="rounded-2xl border border-neutral-100 p-3.5 sm:p-4">
+      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100 text-black sm:h-9 sm:w-9">
         {icon}
       </div>
 
-      <h3 className="mt-3 text-xs font-bold text-black">
+      <h3 className="mt-2.5 text-[11px] font-bold text-black sm:mt-3 sm:text-xs">
         {title}
       </h3>
 
-      <p className="mt-1 text-[10px] text-neutral-400">
+      <p className="mt-1 text-[9px] leading-4 text-neutral-400 sm:text-[10px]">
         {description}
       </p>
     </div>
   );
 }
+
+/*
+ * ============================================================
+ * SKELETON
+ * ============================================================
+ */
 
 function ProductPageSkeleton() {
   return (
@@ -954,34 +1039,33 @@ function ProductPageSkeleton() {
       dir="rtl"
       className="min-h-screen bg-white"
     >
-      <div className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
 
-        <div className="h-4 w-48 animate-pulse rounded bg-neutral-100" />
+        <div className="h-3 w-40 animate-pulse rounded bg-neutral-100 sm:h-4 sm:w-48" />
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:gap-14">
+        <div className="mt-6 grid gap-7 sm:mt-8 sm:gap-10 lg:grid-cols-2 lg:gap-14">
 
-          <div className="aspect-square animate-pulse rounded-[28px] bg-neutral-100" />
+          <div className="aspect-square animate-pulse rounded-2xl bg-neutral-100 sm:rounded-[28px]" />
 
           <div className="flex flex-col justify-center">
 
-            <div className="h-3 w-20 animate-pulse rounded bg-neutral-100" />
+            <div className="h-3 w-16 animate-pulse rounded bg-neutral-100" />
 
-            <div className="mt-5 h-12 w-4/5 animate-pulse rounded-xl bg-neutral-100" />
+            <div className="mt-4 h-9 w-4/5 animate-pulse rounded-xl bg-neutral-100 sm:h-12" />
 
-            <div className="mt-3 h-12 w-3/5 animate-pulse rounded-xl bg-neutral-100" />
+            <div className="mt-3 h-9 w-3/5 animate-pulse rounded-xl bg-neutral-100 sm:h-12" />
 
-            <div className="mt-7 space-y-3">
+            <div className="mt-6 space-y-3">
               <div className="h-3 w-full animate-pulse rounded bg-neutral-100" />
               <div className="h-3 w-5/6 animate-pulse rounded bg-neutral-100" />
               <div className="h-3 w-2/3 animate-pulse rounded bg-neutral-100" />
             </div>
 
-            <div className="mt-8 h-20 animate-pulse rounded-xl bg-neutral-100" />
+            <div className="mt-7 h-16 animate-pulse rounded-xl bg-neutral-100" />
 
             <div className="mt-5 h-12 animate-pulse rounded-xl bg-neutral-100" />
 
-            <div className="mt-7 h-14 animate-pulse rounded-2xl bg-neutral-100" />
-
+            <div className="mt-6 h-14 animate-pulse rounded-2xl bg-neutral-100" />
           </div>
         </div>
       </div>

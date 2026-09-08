@@ -131,7 +131,7 @@ export default function SearchBar({
           transition-[width]
           duration-300
           ease-out
-
+          mr-2
           ${
             !isOpen
               ? `w-[min(${mobile ? "7" : "10"}rem,calc(100vw-5.5rem))]`
