@@ -7,7 +7,7 @@ export default function FooterBrand() {
         href="/"
         className="inline-block text-xl font-extrabold tracking-tight text-black transition-opacity duration-200 hover:opacity-70"
       >
-        ElectroMart
+        NAME
       </Link>
 
       <p className="mt-4 text-sm leading-7 text-neutral-500">

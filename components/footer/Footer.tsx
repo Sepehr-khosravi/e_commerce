@@ -104,7 +104,8 @@ export default function Footer() {
           "
         >
           <p className="text-xs text-neutral-400">
-            © {new Date().getFullYear()} ElectroMart.
+            © {new Date().getFullYear()} NAME
+
             تمامی حقوق محفوظ است.
           </p>
 

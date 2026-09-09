@@ -11,7 +11,7 @@ export default function Logo() {
       </div>
 
       <span className="text-lg font-bold tracking-tight text-black">
-        NEXORA
+          NAME
       </span>
     </Link>
   );
