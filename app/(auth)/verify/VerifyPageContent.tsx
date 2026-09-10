@@ -76,7 +76,10 @@ export default function VerifyPageContent() {
 
       router.replace("/");
       // router.refresh();
-      window.location.reload();
+      //after 3seccond!
+      setTimeout(()=>{
+        window.location.reload();
+      }, 3000);
     } catch (error) {
       setError(
         error instanceof Error
