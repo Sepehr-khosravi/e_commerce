@@ -61,18 +61,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Next.js standalone output
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-
-# Prisma files (schema + migrations)
 COPY --from=builder /app/prisma ./prisma
-
-# Prisma CLI (برای migrate deploy)
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/.bin ./node_modules/.bin
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+CMD ["node", "server.js"]

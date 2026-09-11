@@ -1,9 +1,30 @@
 services:
 
   # ==========================================
+  # Migration (فقط موقع نیاز اجرا میشه)
+  # ==========================================
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+    command: npx prisma migrate deploy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - electromart-net
+
+
+  # ==========================================
   # Next.js
   # ==========================================
-
   app:
     build:
       context: .
@@ -33,26 +54,6 @@ services:
     environment:
       NODE_ENV: production
 
-      DATABASE_URL: ${DATABASE_URL}
-
-      REDIS_URL: ${REDIS_URL}
-
-      JWT_SECRET: ${JWT_SECRET}
-
-      OTP_SECRET: ${OTP_SECRET}
-
-      ZARINPAL_BASE_URL: ${ZARINPAL_BASE_URL}
-
-      ZARINPAL_MERCHANT_ID: ${ZARINPAL_MERCHANT_ID}
-
-      ZARINPAL_AMOUNT_MULTIPLIER: ${ZARINPAL_AMOUNT_MULTIPLIER}
-
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
-
-      TOROB_TOKEN_VERSION: ${TOROB_TOKEN_VERSION}
-
-      TOROB_PUBLIC_KEY: ${TOROB_PUBLIC_KEY}
-
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,18 +64,10 @@ services:
     networks:
       - electromart-net
 
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 40s
-
 
   # ==========================================
   # PostgreSQL
   # ==========================================
-
   postgres:
     image: postgres:17-alpine
 
@@ -111,7 +104,6 @@ services:
   # ==========================================
   # Redis
   # ==========================================
-
   redis:
     image: redis:7-alpine
 
@@ -149,18 +141,15 @@ services:
 # ==========================================
 # Networks
 # ==========================================
-
 networks:
   electromart-net:
     driver: bridge
 
 
 # ==========================================
-# Persistent volumes
+# Volumes
 # ==========================================
-
 volumes:
-
   postgres_data:
     name: electromart_postgres_data
 
