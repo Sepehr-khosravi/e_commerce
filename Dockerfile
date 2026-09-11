@@ -20,14 +20,20 @@ RUN npm ci
 
 FROM base AS builder
 
+ARG REDIS_URL
+ARG DATABASE_URL
+ARG NEXT_PUBLIC_APP_URL
+
+ENV REDIS_URL=$REDIS_URL
+ENV DATABASE_URL=$DATABASE_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+
 COPY --from=deps /app/node_modules ./node_modules
 
 COPY . .
 
-# Generate Prisma Client
 RUN npx prisma generate
 
-# Build Next.js
 RUN npm run build
 
 
@@ -41,14 +47,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Next.js standalone output
 COPY --from=builder /app/public ./public
-
 COPY --from=builder /app/.next/standalone ./
-
 COPY --from=builder /app/.next/static ./.next/static
-
-# Prisma files
 COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
