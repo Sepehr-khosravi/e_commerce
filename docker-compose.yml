@@ -1,0 +1,159 @@
+services:
+
+  # ==========================================
+  # Next.js
+  # ==========================================
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+
+    container_name: electromart-app
+
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    env_file:
+      - .env
+
+    environment:
+      NODE_ENV: production
+
+      DATABASE_URL: ${DATABASE_URL}
+
+      REDIS_URL: ${REDIS_URL}
+
+      JWT_SECRET: ${JWT_SECRET}
+
+      OTP_SECRET: ${OTP_SECRET}
+
+      ZARINPAL_BASE_URL: ${ZARINPAL_BASE_URL}
+
+      ZARINPAL_MERCHANT_ID: ${ZARINPAL_MERCHANT_ID}
+
+      ZARINPAL_AMOUNT_MULTIPLIER: ${ZARINPAL_AMOUNT_MULTIPLIER}
+
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+
+      TOROB_TOKEN_VERSION: ${TOROB_TOKEN_VERSION}
+
+      TOROB_PUBLIC_KEY: ${TOROB_PUBLIC_KEY}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
+    networks:
+      - electromart-net
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+
+  # ==========================================
+  # PostgreSQL
+  # ==========================================
+
+  postgres:
+    image: postgres:17-alpine
+
+    container_name: electromart-postgres
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
+        ]
+
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    ports:
+      - "127.0.0.1:5432:5432"
+
+    networks:
+      - electromart-net
+
+
+  # ==========================================
+  # Redis
+  # ==========================================
+
+  redis:
+    image: redis:7-alpine
+
+    container_name: electromart-redis
+
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+    ports:
+      - "127.0.0.1:6379:6379"
+
+    networks:
+      - electromart-net
+
+
+# ==========================================
+# Networks
+# ==========================================
+
+networks:
+  electromart-net:
+    driver: bridge
+
+
+# ==========================================
+# Persistent volumes
+# ==========================================
+
+volumes:
+
+  postgres_data:
+    name: electromart_postgres_data
+
+  redis_data:
+    name: electromart_redis_data
