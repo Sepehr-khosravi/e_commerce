@@ -3,9 +3,9 @@ FROM node:22-alpine AS base
 WORKDIR /app
 
 
-# =========================
+# =========================================================
 # Dependencies
-# =========================
+# =========================================================
 
 FROM base AS deps
 
@@ -14,9 +14,9 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 
-# =========================
+# =========================================================
 # Builder
-# =========================
+# =========================================================
 
 FROM base AS builder
 
@@ -51,9 +51,9 @@ RUN npx prisma generate
 RUN npm run build
 
 
-# =========================
+# =========================================================
 # Production
-# =========================
+# =========================================================
 
 FROM node:22-alpine AS runner
 
@@ -61,10 +61,14 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Application files
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
+
+# Do not run the application as root.
+USER node
 
 EXPOSE 3000
 
