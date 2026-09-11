@@ -101,6 +101,8 @@ export default function Footer() {
             sm:flex-row
             sm:items-center
             sm:justify-between
+            min-h-40
+            min-md:min-h-5
           "
         >
           <p className="text-xs text-neutral-400">

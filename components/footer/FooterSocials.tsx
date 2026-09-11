@@ -10,7 +10,7 @@ export default function FooterSocials() {
       </h3>
 
       <div className="mt-5 flex items-center gap-2">
-        <a
+        {/* <a
           href="#"
           aria-label="Instagram"
           className="
@@ -29,7 +29,7 @@ export default function FooterSocials() {
             hover:text-white
           "
         >
-        </a>
+        </a> */}
 
         <a
           href="#"
@@ -53,7 +53,7 @@ export default function FooterSocials() {
           <Send size={17} />
         </a>
 
-        <a
+        {/* <a
           href="#"
           aria-label="GitHub"
           className="
@@ -71,7 +71,7 @@ export default function FooterSocials() {
             hover:bg-black
             hover:text-white
           "
-        >        </a>
+        >        </a> */}
       </div>
     </div>
   );

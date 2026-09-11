@@ -5,7 +5,7 @@ import Footer from "@/components/footer/Footer";
 import Navbar from "@/components/navbar/Navbar";
 import { MobileTabBar } from "@/components/tab/MobileTabBar";
 export const metadata: Metadata = {
-  title: "ElectroMart",
+  title: "SampleShop",
   description: "Your one-stop shop for all electronics and gadgets",
 };
 
