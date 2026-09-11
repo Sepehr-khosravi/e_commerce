@@ -9,7 +9,16 @@ services:
       dockerfile: Dockerfile
       target: builder
       args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+        REDIS_URL: ${REDIS_URL}
         DATABASE_URL: ${DATABASE_URL}
+        JWT_SECRET: ${JWT_SECRET}
+        OTP_SECRET: ${OTP_SECRET}
+        ZARINPAL_BASE_URL: ${ZARINPAL_BASE_URL}
+        ZARINPAL_MERCHANT_ID: ${ZARINPAL_MERCHANT_ID}
+        ZARINPAL_AMOUNT_MULTIPLIER: ${ZARINPAL_AMOUNT_MULTIPLIER}
+        TOROB_TOKEN_VERSION: ${TOROB_TOKEN_VERSION}
+        TOROB_PUBLIC_KEY: ${TOROB_PUBLIC_KEY}
     command: npx prisma migrate deploy
     env_file:
       - .env
