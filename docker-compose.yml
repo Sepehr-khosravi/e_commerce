@@ -1,7 +1,7 @@
 services:
 
   # ==========================================
-  # Migration (فقط موقع نیاز اجرا میشه)
+  # Migration
   # ==========================================
   migrate:
     build:
@@ -19,14 +19,19 @@ services:
         ZARINPAL_AMOUNT_MULTIPLIER: ${ZARINPAL_AMOUNT_MULTIPLIER}
         TOROB_TOKEN_VERSION: ${TOROB_TOKEN_VERSION}
         TOROB_PUBLIC_KEY: ${TOROB_PUBLIC_KEY}
+
     command: npx prisma migrate deploy
+
     env_file:
       - .env
+
     environment:
       DATABASE_URL: ${DATABASE_URL}
+
     depends_on:
       postgres:
         condition: service_healthy
+
     networks:
       - electromart-net
 
@@ -63,6 +68,9 @@ services:
     environment:
       NODE_ENV: production
 
+    volumes:
+      - ./storage:/app/storage
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,7 +106,6 @@ services:
           "CMD-SHELL",
           "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
         ]
-
       interval: 5s
       timeout: 5s
       retries: 10
@@ -135,7 +142,6 @@ services:
           "redis-cli",
           "ping"
         ]
-
       interval: 5s
       timeout: 3s
       retries: 10
