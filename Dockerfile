@@ -66,14 +66,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Prisma files
+# Prisma files (schema + migrations)
 COPY --from=builder /app/prisma ./prisma
 
-# Prisma Client (runtime)
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-
-# Prisma CLI + dependencies (برای migrate deploy)
+# Prisma CLI (برای migrate deploy)
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/.bin ./node_modules/.bin
 
