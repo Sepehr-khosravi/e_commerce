@@ -21,6 +21,7 @@ export interface CreateOrderData {
 
 export interface CreateOrderItemData {
   productId: number;
+  variantId: number | null;
   productTitle: string;
   productPrice: number;
   offer: number;
@@ -30,11 +31,14 @@ export interface CreateOrderItemData {
 
 export interface CreateOrderRecordData {
   userId: number;
+
   firstName: string;
   lastName: string;
   phone: string;
   address: string;
+
   totalPrice: number;
+
   items: CreateOrderItemData[];
 }
 

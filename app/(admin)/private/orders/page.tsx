@@ -44,6 +44,13 @@ type Product = {
   price: number | string;
 };
 
+type ProductVariant = {
+  id: number;
+  color: string | null;
+  count: number;
+  isActive: boolean;
+};
+
 type Payment = {
   id: number;
   orderId: number;
@@ -68,6 +75,14 @@ type OrderItem = {
   orderId: number;
   productId: number;
 
+  /*
+   * Selected product variant.
+   *
+   * For products with colors, this points to the
+   * exact color selected by the customer.
+   */
+  variantId: number | null;
+
   productTitle: string;
   productPrice: number | string;
   productOffer: number | string;
@@ -78,6 +93,11 @@ type OrderItem = {
   createdAt: string;
 
   product?: Product | null;
+
+  /*
+   * Returned by the protected admin order-details API.
+   */
+  variant?: ProductVariant | null;
 };
 
 type User = {
@@ -170,7 +190,8 @@ const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
  * The frontend should not use this value to verify payment.
  * Payment verification must remain completely server-side.
  */
-const ZARINPAL_BASE_URL = "https://sandbox.zarinpal.com";
+const ZARINPAL_BASE_URL =
+  "https://sandbox.zarinpal.com";
 
 /* =========================================================
    Helpers
@@ -183,11 +204,15 @@ function formatPrice(value: number | string) {
     return "۰";
   }
 
-  return new Intl.NumberFormat("fa-IR").format(number);
+  return new Intl.NumberFormat("fa-IR").format(
+    number
+  );
 }
 
 function formatNumber(value: number) {
-  return new Intl.NumberFormat("fa-IR").format(value);
+  return new Intl.NumberFormat("fa-IR").format(
+    value
+  );
 }
 
 function formatDate(value?: string) {
@@ -222,7 +247,9 @@ function getStatusLabel(status: OrderStatus) {
   return ORDER_STATUS_LABELS[status];
 }
 
-function getPaymentStatusLabel(status: PaymentStatus) {
+function getPaymentStatusLabel(
+  status: PaymentStatus
+) {
   return PAYMENT_STATUS_LABELS[status];
 }
 
@@ -244,7 +271,9 @@ function getPaymentUrl(authority: string) {
 ========================================================= */
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(
+    []
+  );
 
   const [loading, setLoading] = useState(true);
 
@@ -256,9 +285,8 @@ export default function AdminOrdersPage() {
     OrderStatus | "ALL"
   >("ALL");
 
-  const [paymentStatus, setPaymentStatus] = useState<
-    PaymentStatus | "ALL"
-  >("ALL");
+  const [paymentStatus, setPaymentStatus] =
+    useState<PaymentStatus | "ALL">("ALL");
 
   /*
    * Backend currently returns a numeric cursor.
@@ -280,7 +308,8 @@ export default function AdminOrdersPage() {
   const [cursorHistory, setCursorHistory] =
     useState<(number | null)[]>([null]);
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] =
+    useState(1);
 
   const [selectedOrder, setSelectedOrder] =
     useState<Order | null>(null);
@@ -295,9 +324,6 @@ export default function AdminOrdersPage() {
    * Used to prevent an older request from overwriting
    * newer filter/page state.
    */
-  // const [requestVersion, setRequestVersion] =
-  //   useState(0);
-
   const requestVersionRef = useRef(0);
 
   /* =========================================================
@@ -313,39 +339,39 @@ export default function AdminOrdersPage() {
   ) {
     const requestVersion =
       ++requestVersionRef.current;
-  
+
     try {
       if (options?.showLoading !== false) {
         setLoading(true);
       }
-  
+
       setError("");
-  
+
       const params = new URLSearchParams();
-  
+
       params.set(
         "limit",
         String(DEFAULT_LIMIT)
       );
-  
+
       if (cursor !== null) {
         params.set(
           "cursor",
           String(cursor)
         );
       }
-  
+
       if (status !== "ALL") {
         params.set("status", status);
       }
-  
+
       if (paymentStatus !== "ALL") {
         params.set(
           "paymentStatus",
           paymentStatus
         );
       }
-  
+
       const response = await fetch(
         `/api/admin/orders?${params.toString()}`,
         {
@@ -354,12 +380,13 @@ export default function AdminOrdersPage() {
           credentials: "same-origin",
         }
       );
-  
-      const text = await response.text();
-  
+
+      const text =
+        await response.text();
+
       let data: OrdersResponse &
         ApiErrorResponse = {};
-  
+
       try {
         data = text
           ? JSON.parse(text)
@@ -369,15 +396,17 @@ export default function AdminOrdersPage() {
           "پاسخ سرور JSON معتبر نیست."
         );
       }
-  
-      // Ignore only genuinely older requests.
+
+      /*
+       * Ignore only genuinely older requests.
+       */
       if (
         requestVersion !==
         requestVersionRef.current
       ) {
         return;
       }
-  
+
       if (
         response.status === 401 ||
         response.status === 403
@@ -386,31 +415,31 @@ export default function AdminOrdersPage() {
           "دسترسی به پنل مدیریت سفارش‌ها ندارید."
         );
       }
-  
+
       if (!response.ok) {
         throw new Error(
           data.error ||
             "دریافت سفارش‌ها ناموفق بود."
         );
       }
-  
+
       const receivedOrders =
         Array.isArray(data.orders)
           ? data.orders
           : [];
-  
+
       setOrders(receivedOrders);
-  
+
       setNextCursor(
         data.nextCursor ?? null
       );
-  
+
       setHasNextPage(
         data.hasMore ??
           data.hasNextPage ??
           false
       );
-  
+
       if (options?.page !== undefined) {
         setCurrentPage(options.page);
       }
@@ -419,14 +448,14 @@ export default function AdminOrdersPage() {
         "Admin orders load error:",
         error
       );
-  
+
       if (
         requestVersion !==
         requestVersionRef.current
       ) {
         return;
       }
-  
+
       setError(
         error instanceof Error
           ? error.message
@@ -450,16 +479,17 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     setCurrentPage(1);
     setCursorHistory([null]);
-  
+
     loadOrders(null, {
       page: 1,
     });
-  
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     status,
     paymentStatus,
   ]);
+
   /* =========================================================
      Refresh
   ========================================================= */
@@ -2039,6 +2069,10 @@ function OrderDetailsModal({
                       ) &&
                       offer > 0;
 
+                    const variantColor =
+                      item.variant?.color ??
+                      null;
+
                     return (
                       <div
                         key={item.id}
@@ -2082,12 +2116,41 @@ function OrderDetailsModal({
                           </p>
 
                           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+
+                            {/* Color */}
+
+                            {variantColor && (
+                              <span className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-50 px-2 py-1 text-neutral-500">
+                                <span
+                                  className="h-3 w-3 shrink-0 rounded-full border border-black/10 shadow-sm"
+                                  style={{
+                                    backgroundColor:
+                                      variantColor,
+                                  }}
+                                />
+
+                                <span>
+                                  رنگ:
+                                </span>
+
+                                <span className="font-semibold text-neutral-700">
+                                  {
+                                    variantColor
+                                  }
+                                </span>
+                              </span>
+                            )}
+
+                            {/* Quantity */}
+
                             <span className="text-neutral-400">
                               تعداد:{" "}
                               {formatNumber(
                                 quantity
                               )}
                             </span>
+
+                            {/* Unit Price */}
 
                             <span className="text-neutral-400">
                               قیمت واحد:
@@ -2118,6 +2181,8 @@ function OrderDetailsModal({
                               </span>
                             )}
                           </div>
+
+                          {/* Discount Details */}
 
                           {hasDiscount && (
                             <div className="mt-2 flex flex-wrap items-center gap-2">

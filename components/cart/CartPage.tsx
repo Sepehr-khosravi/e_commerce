@@ -20,6 +20,14 @@ import CartItem from "@/components/cart/CartItem";
 import CartSummary from "@/components/cart/CartSummary";
 import CartSkeleton from "@/components/cart/CartSkeleton";
 
+type ProductVariant = {
+  id: number;
+  productId: number;
+  color: string | null;
+  count: number;
+  isActive: boolean;
+};
+
 type Product = {
   id: number;
   title: string;
@@ -35,7 +43,9 @@ type CartItemType = {
   id: number;
   quantity: number;
   productId: number;
+  variantId: number | null;
   product: Product;
+  variant: ProductVariant | null;
 };
 
 type Cart = {
@@ -53,23 +63,43 @@ type CartResponse = {
 const PAGE_SIZE = 20;
 
 export default function CartPage() {
-  const [items, setItems] = useState<CartItemType[]>([]);
-  const [totalItems, setTotalItems] = useState(0);
-  const [nextCursor, setNextCursor] = useState<number | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] =
+    useState<CartItemType[]>([]);
 
-  const loadingMoreRef = useRef(false);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [totalItems, setTotalItems] =
+    useState(0);
+
+  const [nextCursor, setNextCursor] =
+    useState<number | null>(null);
+
+  const [hasMore, setHasMore] =
+    useState(true);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [loadingMore, setLoadingMore] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const loadingMoreRef =
+    useRef(false);
+
+  const loadMoreRef =
+    useRef<HTMLDivElement | null>(null);
 
   const fetchCart = useCallback(
     async (cursor?: number) => {
       if (cursor !== undefined) {
-        if (loadingMoreRef.current || !hasMore) {
+        if (
+          loadingMoreRef.current ||
+          !hasMore
+        ) {
           return;
         }
+
         loadingMoreRef.current = true;
         setLoadingMore(true);
       } else {
@@ -79,11 +109,19 @@ export default function CartPage() {
       try {
         setError(null);
 
-        const params = new URLSearchParams();
-        params.set("limit", String(PAGE_SIZE));
+        const params =
+          new URLSearchParams();
+
+        params.set(
+          "limit",
+          String(PAGE_SIZE)
+        );
 
         if (cursor !== undefined) {
-          params.set("cursor", String(cursor));
+          params.set(
+            "cursor",
+            String(cursor)
+          );
         }
 
         const response = await fetch(
@@ -96,37 +134,86 @@ export default function CartPage() {
         );
 
         if (response.status === 401) {
-          window.location.href = "/login";
+          window.location.href =
+            "/login";
+
           return;
         }
 
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error || "دریافت سبد خرید با مشکل مواجه شد");
+          const data =
+            await response
+              .json()
+              .catch(() => null);
+
+          throw new Error(
+            data?.error ||
+              "دریافت سبد خرید با مشکل مواجه شد"
+          );
         }
 
-        const data: CartResponse = await response.json();
+        const data: CartResponse =
+          await response.json();
+
         const cart = data.cart;
 
-        setTotalItems(cart.totalItems);
-        setNextCursor(cart.nextCursor);
-        setHasMore(cart.hasMore);
+        setTotalItems(
+          cart.totalItems
+        );
 
-        if (cursor === undefined) {
+        setNextCursor(
+          cart.nextCursor
+        );
+
+        setHasMore(
+          cart.hasMore
+        );
+
+        if (
+          cursor === undefined
+        ) {
           setItems(cart.items);
         } else {
           setItems((previous) => {
-            const existingIds = new Set(previous.map((item) => item.id));
-            const newItems = cart.items.filter((item) => !existingIds.has(item.id));
-            return [...previous, ...newItems];
+            const existingIds =
+              new Set(
+                previous.map(
+                  (item) => item.id
+                )
+              );
+
+            const newItems =
+              cart.items.filter(
+                (item) =>
+                  !existingIds.has(
+                    item.id
+                  )
+              );
+
+            return [
+              ...previous,
+              ...newItems,
+            ];
           });
         }
       } catch (error) {
-        console.error("Failed to load cart:", error);
-        setError(error instanceof Error ? error.message : "دریافت سبد خرید با مشکل مواجه شد");
+        console.error(
+          "Failed to load cart:",
+          error
+        );
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : "دریافت سبد خرید با مشکل مواجه شد"
+        );
       } finally {
-        if (cursor !== undefined) {
-          loadingMoreRef.current = false;
+        if (
+          cursor !== undefined
+        ) {
+          loadingMoreRef.current =
+            false;
+
           setLoadingMore(false);
         } else {
           setLoading(false);
@@ -141,110 +228,244 @@ export default function CartPage() {
   }, [fetchCart]);
 
   useEffect(() => {
-    const element = loadMoreRef.current;
-    if (!element || !hasMore) return;
+    const element =
+      loadMoreRef.current;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && nextCursor !== null && !loadingMoreRef.current) {
-          fetchCart(nextCursor);
+    if (!element || !hasMore) {
+      return;
+    }
+
+    const observer =
+      new IntersectionObserver(
+        (entries) => {
+          const entry =
+            entries[0];
+
+          if (
+            entry.isIntersecting &&
+            nextCursor !== null &&
+            !loadingMoreRef.current
+          ) {
+            fetchCart(nextCursor);
+          }
+        },
+        {
+          rootMargin: "400px",
         }
-      },
-      { rootMargin: "400px" }
-    );
+      );
 
     observer.observe(element);
-    return () => observer.disconnect();
-  }, [fetchCart, nextCursor, hasMore]);
 
-  const handleRemove = async (itemId: number) => {
-    const previousItems = items;
-    setItems((current) => current.filter((item) => item.id !== itemId));
-    setTotalItems((current) => Math.max(current - 1, 0));
+    return () =>
+      observer.disconnect();
+  }, [
+    fetchCart,
+    nextCursor,
+    hasMore,
+  ]);
 
-    try {
-      const response = await fetch(`/api/cart/${itemId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
+  const handleRemove = async (
+    itemId: number
+  ) => {
+    const previousItems =
+      items;
 
-      if (response.status === 401) {
-        window.location.href = "/login";
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error("حذف محصول با مشکل مواجه شد");
-      }
-    } catch (error) {
-      console.error("Failed to remove cart item:", error);
-      setItems(previousItems);
-      setTotalItems(previousItems.length);
-      setError(error instanceof Error ? error.message : "حذف محصول با مشکل مواجه شد");
-    }
-  };
-
-  const handleQuantityChange = async (itemId: number, quantity: number) => {
-    const previousItems = items;
     setItems((current) =>
-      current.map((item) =>
-        item.id === itemId ? { ...item, quantity } : item
+      current.filter(
+        (item) =>
+          item.id !== itemId
       )
     );
 
-    try {
-      const response = await fetch(`/api/cart/${itemId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ quantity }),
-      });
+    setTotalItems((current) =>
+      Math.max(current - 1, 0)
+    );
 
-      if (response.status === 401) {
-        window.location.href = "/login";
+    try {
+      const response =
+        await fetch(
+          `/api/cart/${itemId}`,
+          {
+            method: "DELETE",
+            credentials: "include",
+          }
+        );
+
+      if (
+        response.status === 401
+      ) {
+        window.location.href =
+          "/login";
+
         return;
       }
 
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error || "تعداد محصول به‌روزرسانی نشد");
+        const data =
+          await response
+            .json()
+            .catch(() => null);
+
+        throw new Error(
+          data?.error ||
+            "حذف محصول با مشکل مواجه شد"
+        );
       }
     } catch (error) {
-      console.error("Failed to update quantity:", error);
+      console.error(
+        "Failed to remove cart item:",
+        error
+      );
+
       setItems(previousItems);
-      setError(error instanceof Error ? error.message : "تعداد محصول به‌روزرسانی نشد");
+
+      setTotalItems(
+        previousItems.length
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "حذف محصول با مشکل مواجه شد"
+      );
     }
   };
 
-  const handleClearCart = async () => {
-    const confirmed = window.confirm("آیا مطمئن هستید که می‌خواهید سبد خرید را خالی کنید؟");
-    if (!confirmed) return;
+  const handleQuantityChange =
+    async (
+      itemId: number,
+      quantity: number
+    ) => {
+      const previousItems =
+        items;
 
-    try {
-      const response = await fetch("/api/cart", {
-        method: "DELETE",
-        credentials: "include",
-      });
+      setItems((current) =>
+        current.map((item) =>
+          item.id === itemId
+            ? {
+                ...item,
+                quantity,
+              }
+            : item
+        )
+      );
 
-      if (response.status === 401) {
-        window.location.href = "/login";
+      try {
+        const response =
+          await fetch(
+            `/api/cart/${itemId}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              credentials:
+                "include",
+              body: JSON.stringify({
+                quantity,
+              }),
+            }
+          );
+
+        if (
+          response.status === 401
+        ) {
+          window.location.href =
+            "/login";
+
+          return;
+        }
+
+        if (!response.ok) {
+          const data =
+            await response
+              .json()
+              .catch(() => null);
+
+          throw new Error(
+            data?.error ||
+              "تعداد محصول به‌روزرسانی نشد"
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to update quantity:",
+          error
+        );
+
+        setItems(
+          previousItems
+        );
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : "تعداد محصول به‌روزرسانی نشد"
+        );
+      }
+    };
+
+  const handleClearCart =
+    async () => {
+      const confirmed =
+        window.confirm(
+          "آیا مطمئن هستید که می‌خواهید سبد خرید را خالی کنید؟"
+        );
+
+      if (!confirmed) {
         return;
       }
 
-      if (!response.ok) {
-        throw new Error("خالی کردن سبد خرید با مشکل مواجه شد");
-      }
+      try {
+        const response =
+          await fetch(
+            "/api/cart",
+            {
+              method: "DELETE",
+              credentials:
+                "include",
+            }
+          );
 
-      setItems([]);
-      setTotalItems(0);
-      setNextCursor(null);
-      setHasMore(false);
-    } catch (error) {
-      console.error("Failed to clear cart:", error);
-      setError(error instanceof Error ? error.message : "خالی کردن سبد خرید با مشکل مواجه شد");
-    }
-  };
+        if (
+          response.status === 401
+        ) {
+          window.location.href =
+            "/login";
+
+          return;
+        }
+
+        if (!response.ok) {
+          const data =
+            await response
+              .json()
+              .catch(() => null);
+
+          throw new Error(
+            data?.error ||
+              "خالی کردن سبد خرید با مشکل مواجه شد"
+          );
+        }
+
+        setItems([]);
+        setTotalItems(0);
+        setNextCursor(null);
+        setHasMore(false);
+      } catch (error) {
+        console.error(
+          "Failed to clear cart:",
+          error
+        );
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : "خالی کردن سبد خرید با مشکل مواجه شد"
+        );
+      }
+    };
 
   if (loading) {
     return (
@@ -260,7 +481,10 @@ export default function CartPage() {
     );
   }
 
-  if (error && items.length === 0) {
+  if (
+    error &&
+    items.length === 0
+  ) {
     return (
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-7xl px-4 py-10">
@@ -278,12 +502,22 @@ export default function CartPage() {
         <div className="mx-auto max-w-7xl px-4 py-16">
           <div className="flex flex-col items-center justify-center text-center">
             <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gray-100">
-              <ShoppingBag size={34} className="text-gray-500" />
+              <ShoppingBag
+                size={34}
+                className="text-gray-500"
+              />
             </div>
-            <h1 className="text-2xl font-semibold text-black">سبد خرید شما خالی است</h1>
+
+            <h1 className="text-2xl font-semibold text-black">
+              سبد خرید شما خالی است
+            </h1>
+
             <p className="mt-2 max-w-md text-sm text-gray-500">
-              محصولات مورد نظرتان را به سبد خرید اضافه کنید تا اینجا نمایش داده شوند.
+              محصولات مورد نظرتان را به
+              سبد خرید اضافه کنید تا اینجا
+              نمایش داده شوند.
             </p>
+
             <Link
               href="/products"
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
@@ -309,15 +543,24 @@ export default function CartPage() {
               <ArrowLeft size={16} />
               ادامه خرید
             </Link>
-            <h1 className="text-3xl font-bold tracking-tight text-black">سبد خرید</h1>
+
+            <h1 className="text-3xl font-bold tracking-tight text-black">
+              سبد خرید
+            </h1>
+
             <p className="mt-1 text-sm text-gray-500">
-              {new Intl.NumberFormat("fa-IR").format(totalItems)} محصول در سبد خرید شما
+              {new Intl.NumberFormat(
+                "fa-IR"
+              ).format(totalItems)}{" "}
+              محصول در سبد خرید شما
             </p>
           </div>
 
           <button
             type="button"
-            onClick={handleClearCart}
+            onClick={
+              handleClearCart
+            }
             className="inline-flex items-center gap-2 self-start rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 sm:self-auto"
           >
             <Trash2 size={16} />
@@ -334,14 +577,20 @@ export default function CartPage() {
         <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
           <section>
             <div className="space-y-4">
-              {items.map((item) => (
-                <CartItem
-                  key={item.id}
-                  item={item}
-                  onRemove={handleRemove}
-                  onUpdateQuantity={handleQuantityChange}
-                />
-              ))}
+              {items.map(
+                (item) => (
+                  <CartItem
+                    key={item.id}
+                    item={item}
+                    onRemove={
+                      handleRemove
+                    }
+                    onUpdateQuantity={
+                      handleQuantityChange
+                    }
+                  />
+                )
+              )}
             </div>
 
             <div
@@ -355,16 +604,21 @@ export default function CartPage() {
                 </div>
               )}
 
-              {!loadingMore && !hasMore && items.length > 0 && (
-                <p className="py-6 text-sm text-gray-400">
-                  همه محصولات سبد خرید نمایش داده شدند.
-                </p>
-              )}
+              {!loadingMore &&
+                !hasMore &&
+                items.length > 0 && (
+                  <p className="py-6 text-sm text-gray-400">
+                    همه محصولات سبد خرید
+                    نمایش داده شدند.
+                  </p>
+                )}
             </div>
           </section>
 
           <aside>
-            <CartSummary items={items} />
+            <CartSummary
+              items={items}
+            />
           </aside>
         </div>
       </div>

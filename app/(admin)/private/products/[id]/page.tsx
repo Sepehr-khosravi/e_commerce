@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,10 +9,19 @@ import {
   Package,
   Save,
   Trash2,
-  X,
   GripVertical,
+  Plus,
+  Palette,
+  X,
 } from "lucide-react";
 import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
+
+type ProductVariant = {
+  id: number;
+  color: string | null;
+  count: number;
+  isActive: boolean;
+};
 
 type Product = {
   id: number;
@@ -22,7 +31,16 @@ type Product = {
   offer: number | string | null;
   images: string[];
   description: string;
-  count: number;
+
+  /*
+   * Legacy field.
+   * فقط برای backward compatibility نگه داشته شده.
+   * موجودی اصلی از variants محاسبه می‌شود.
+   */
+  count?: number;
+
+  variants: ProductVariant[];
+
   purchaseCount: number;
   isFeatured: boolean;
   isActive: boolean;
@@ -42,6 +60,12 @@ type ImageItem = {
   file?: File;
   preview?: string;
   isNew?: boolean;
+};
+
+type ProductVariantForm = {
+  id?: number;
+  color: string | null;
+  count: string;
 };
 
 function formatPrice(value: number | string) {
@@ -89,6 +113,41 @@ function createImageId() {
     .slice(2)}`;
 }
 
+/*
+ * --------------------------------------------------
+ * Slug
+ * --------------------------------------------------
+ */
+
+function generateSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^\p{L}\p{N}-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function normalizeManualSlug(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^\p{L}\p{N}-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function isValidHexColor(
+  color: string
+) {
+  return /^#[0-9A-Fa-f]{6}$/.test(
+    color
+  );
+}
+
 export default function EditProductPage({
   params,
 }: {
@@ -117,14 +176,31 @@ export default function EditProductPage({
   const [slug, setSlug] =
     useState("");
 
+  const [slugManuallyEdited, setSlugManuallyEdited] =
+    useState(false);
+
   const [price, setPrice] =
     useState("");
 
   const [offer, setOffer] =
     useState("");
 
-  const [count, setCount] =
-    useState("0");
+  /*
+   * --------------------------------------------------
+   * Variants
+   * --------------------------------------------------
+   */
+
+  const [hasColors, setHasColors] =
+    useState(false);
+
+  const [variants, setVariants] =
+    useState<ProductVariantForm[]>([
+      {
+        color: null,
+        count: "0",
+      },
+    ]);
 
   const [categoryId, setCategoryId] =
     useState("");
@@ -215,6 +291,12 @@ export default function EditProductPage({
         setTitle(product.title);
         setSlug(product.slug);
 
+        /*
+         * چون slug از دیتابیس آمده،
+         * هنوز دستی تغییر داده نشده.
+         */
+        setSlugManuallyEdited(false);
+
         setPrice(
           formatInputPrice(
             String(product.price)
@@ -230,9 +312,59 @@ export default function EditProductPage({
             : ""
         );
 
-        setCount(
-          String(product.count)
-        );
+        /*
+         * ------------------------------------------------
+         * Variants
+         * ------------------------------------------------
+         */
+
+        const productVariants =
+          Array.isArray(
+            product.variants
+          )
+            ? product.variants
+            : [];
+
+        if (
+          productVariants.length === 0
+        ) {
+          /*
+           * Fallback برای محصولات قدیمی
+           * که هنوز variant ندارند.
+           */
+          setHasColors(false);
+
+          setVariants([
+            {
+              color: null,
+              count: String(
+                product.count ?? 0
+              ),
+            },
+          ]);
+        } else {
+          const containsColors =
+            productVariants.some(
+              (variant) =>
+                variant.color !== null
+            );
+
+          setHasColors(
+            containsColors
+          );
+
+          setVariants(
+            productVariants.map(
+              (variant) => ({
+                id: variant.id,
+                color: variant.color,
+                count: String(
+                  variant.count
+                ),
+              })
+            )
+          );
+        }
 
         setCategoryId(
           String(product.categoryId)
@@ -324,6 +456,105 @@ export default function EditProductPage({
 
   /*
    * --------------------------------------------------
+   * Slug handlers
+   * --------------------------------------------------
+   */
+
+  function handleTitleChange(
+    value: string
+  ) {
+    setTitle(value);
+
+    if (!slugManuallyEdited) {
+      setSlug(
+        generateSlug(value)
+      );
+    }
+  }
+
+  function handleSlugChange(
+    value: string
+  ) {
+    setSlug(
+      normalizeManualSlug(value)
+    );
+
+    setSlugManuallyEdited(true);
+  }
+
+  /*
+   * --------------------------------------------------
+   * Variant handlers
+   * --------------------------------------------------
+   */
+
+  function handleColorsToggle(
+    enabled: boolean
+  ) {
+    setHasColors(enabled);
+
+    if (enabled) {
+      setVariants([
+        {
+          color: "#000000",
+          count: "0",
+        },
+      ]);
+    } else {
+      setVariants([
+        {
+          color: null,
+          count: "0",
+        },
+      ]);
+    }
+  }
+
+  function updateVariant(
+    index: number,
+    field: keyof ProductVariantForm,
+    value: string | number | null
+  ) {
+    setVariants((current) =>
+      current.map(
+        (variant, variantIndex) =>
+          variantIndex === index
+            ? {
+                ...variant,
+                [field]: value,
+              }
+            : variant
+      )
+    );
+  }
+
+  function addVariant() {
+    setVariants((current) => [
+      ...current,
+      {
+        color: "#000000",
+        count: "0",
+      },
+    ]);
+  }
+
+  function removeVariant(
+    index: number
+  ) {
+    setVariants((current) => {
+      if (current.length <= 1) {
+        return current;
+      }
+
+      return current.filter(
+        (_, variantIndex) =>
+          variantIndex !== index
+      );
+    });
+  }
+
+  /*
+   * --------------------------------------------------
    * Images
    * --------------------------------------------------
    */
@@ -403,6 +634,7 @@ export default function EditProductPage({
   /*
    * Move image left/right
    */
+
   function moveImage(
     index: number,
     direction: "left" | "right"
@@ -565,11 +797,6 @@ export default function EditProductPage({
       );
     }
 
-    /*
-     * چون API آپلود به همان ترتیبی که فایل‌ها
-     * ارسال شده‌اند URL می‌دهد، اینجا آنها را
-     * به image مربوط می‌کنیم.
-     */
     const result = new Map<
       string,
       string
@@ -638,18 +865,127 @@ export default function EditProductPage({
         );
       }
 
-      const numericCount =
-        Number(count);
+      /*
+       * ------------------------------------------------
+       * Validate variants
+       * ------------------------------------------------
+       */
 
+      if (variants.length === 0) {
+        throw new Error(
+          "محصول باید حداقل یک موجودی داشته باشد."
+        );
+      }
+
+      const normalizedVariants =
+        variants.map(
+          (variant) => {
+            const count =
+              Number(
+                variant.count
+              );
+
+            if (
+              !Number.isInteger(
+                count
+              ) ||
+              count < 0
+            ) {
+              throw new Error(
+                "موجودی یکی از رنگ‌ها نامعتبر است."
+              );
+            }
+
+            /*
+             * Product without colors
+             */
+            if (!hasColors) {
+              return {
+                ...(variant.id !==
+                undefined
+                  ? {
+                      id: variant.id,
+                    }
+                  : {}),
+                color: null,
+                count,
+              };
+            }
+
+            /*
+             * Product with colors
+             */
+            const color =
+              variant.color
+                ?.trim()
+                .toUpperCase() ??
+              "";
+
+            if (
+              !isValidHexColor(
+                color
+              )
+            ) {
+              throw new Error(
+                "رنگ یکی از محصولات معتبر نیست. مقدار رنگ باید HEX باشد؛ مثل #FF0000."
+              );
+            }
+
+            return {
+              ...(variant.id !==
+              undefined
+                ? {
+                    id: variant.id,
+                  }
+                : {}),
+              color,
+              count,
+            };
+          }
+        );
+
+      /*
+       * No-color product must have exactly
+       * one variant.
+       */
       if (
-        !Number.isInteger(
-          numericCount
-        ) ||
-        numericCount < 0
+        !hasColors &&
+        normalizedVariants.length !==
+          1
       ) {
         throw new Error(
-          "موجودی محصول نامعتبر است."
+          "محصول بدون رنگ فقط باید یک موجودی داشته باشد."
         );
+      }
+
+      /*
+       * Check duplicate colors
+       */
+      if (hasColors) {
+        const colorSet =
+          new Set<string>();
+
+        for (const variant of normalizedVariants) {
+          if (!variant.color) {
+            throw new Error(
+              "همه رنگ‌ها باید مقدار HEX داشته باشند."
+            );
+          }
+
+          if (
+            colorSet.has(
+              variant.color
+            )
+          ) {
+            throw new Error(
+              "رنگ تکراری مجاز نیست."
+            );
+          }
+
+          colorSet.add(
+            variant.color
+          );
+        }
       }
 
       const numericCategory =
@@ -695,8 +1031,6 @@ export default function EditProductPage({
 
       /*
        * ساخت آرایه نهایی تصاویر
-       *
-       * ترتیب تصاویر حفظ می‌شود.
        */
       const finalImages =
         images
@@ -716,21 +1050,18 @@ export default function EditProductPage({
               Boolean(url)
           );
 
+      /*
+       * ------------------------------------------------
+       * PATCH body
+       * ------------------------------------------------
+       */
+
       const body = {
         title: title.trim(),
         slug: slug.trim(),
 
         price: numericPrice,
 
-        /*
-         * اینجا offer درصد است.
-         *
-         * مثلا:
-         * price = 1,000,000
-         * offer = 20
-         *
-         * قیمت نهایی = 800,000
-         */
         offer: numericOffer,
 
         images: finalImages,
@@ -741,7 +1072,13 @@ export default function EditProductPage({
         categoryId:
           numericCategory,
 
-        count: numericCount,
+        /*
+         * دیگر count در Product نداریم.
+         *
+         * موجودی از variants می‌آید.
+         */
+        variants:
+          normalizedVariants,
 
         isFeatured,
 
@@ -803,7 +1140,7 @@ export default function EditProductPage({
       );
 
       /*
-       * بعد از ذخیره، اطلاعات local را
+       * اطلاعات local تصاویر را
        * با URLهای واقعی هماهنگ می‌کنیم.
        */
       setImages(
@@ -814,9 +1151,6 @@ export default function EditProductPage({
         }))
       );
 
-      /*
-       * کمی مکث برای نمایش پیام موفقیت
-       */
       setTimeout(() => {
         router.push(
           "/private/products"
@@ -878,6 +1212,28 @@ export default function EditProductPage({
 
   /*
    * --------------------------------------------------
+   * Total stock
+   * --------------------------------------------------
+   */
+
+  const totalStock =
+    variants.reduce(
+      (total, variant) =>
+        total +
+        (Number.isInteger(
+          Number(
+            variant.count
+          )
+        )
+          ? Number(
+              variant.count
+            )
+          : 0),
+      0
+    );
+
+  /*
+   * --------------------------------------------------
    * Loading
    * --------------------------------------------------
    */
@@ -910,7 +1266,7 @@ export default function EditProductPage({
             </h1>
 
             <Link
-              href="/admin/products"
+              href="/private/products"
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white"
             >
               بازگشت به محصولات
@@ -991,16 +1347,28 @@ export default function EditProductPage({
               <Input
                 label="نام محصول"
                 value={title}
-                onChange={setTitle}
+                onChange={
+                  handleTitleChange
+                }
                 required
               />
 
-              <Input
-                label="Slug"
-                value={slug}
-                onChange={setSlug}
-                required
-              />
+              <div>
+                <Input
+                  label="Slug"
+                  value={slug}
+                  onChange={
+                    handleSlugChange
+                  }
+                  required
+                />
+
+                <p className="mt-2 text-[10px] text-neutral-400">
+                  {slugManuallyEdited
+                    ? "Slug به صورت دستی تنظیم شده است."
+                    : "با تغییر نام محصول، Slug به صورت خودکار ساخته می‌شود."}
+                </p>
+              </div>
             </div>
 
             <div className="mt-5">
@@ -1040,7 +1408,7 @@ export default function EditProductPage({
             </div>
           </section>
 
-          {/* Price */}
+          {/* Price + variants */}
 
           <section className="rounded-3xl border border-neutral-200 bg-white p-5 sm:p-7">
             <div className="mb-6">
@@ -1049,11 +1417,13 @@ export default function EditProductPage({
               </h2>
 
               <p className="mt-1 text-xs text-neutral-400">
-                قیمت اصلی و درصد تخفیف محصول را تعیین کنید.
+                قیمت، تخفیف و موجودی هر رنگ را مدیریت کنید.
               </p>
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2">
+              {/* Price */}
+
               <div>
                 <label className="mb-2 block text-xs font-semibold text-neutral-600">
                   قیمت اصلی
@@ -1082,6 +1452,8 @@ export default function EditProductPage({
                   </p>
                 )}
               </div>
+
+              {/* Offer */}
 
               <div>
                 <label className="mb-2 block text-xs font-semibold text-neutral-600">
@@ -1112,13 +1484,6 @@ export default function EditProductPage({
                   درصدی از قیمت اصلی کم می‌شود.
                 </p>
               </div>
-
-              <Input
-                label="موجودی"
-                type="number"
-                value={count}
-                onChange={setCount}
-              />
             </div>
 
             {/* Final price preview */}
@@ -1151,6 +1516,288 @@ export default function EditProductPage({
                   </div>
                 </div>
               )}
+
+            {/* ------------------------------------------------
+                Colors
+            ------------------------------------------------ */}
+
+            <div className="mt-7 border-t border-neutral-100 pt-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Palette
+                      size={17}
+                      className="text-neutral-500"
+                    />
+
+                    <h3 className="text-sm font-bold text-black">
+                      رنگ‌بندی و موجودی
+                    </h3>
+                  </div>
+
+                  <p className="mt-1 text-[10px] text-neutral-400">
+                    موجودی هر رنگ را به صورت جداگانه مشخص کنید.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleColorsToggle(
+                      !hasColors
+                    )
+                  }
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                    hasColors
+                      ? "bg-black"
+                      : "bg-neutral-200"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${
+                      hasColors
+                        ? "right-1"
+                        : "right-6"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="mt-5">
+                {hasColors ? (
+                  <div className="space-y-3">
+                    {variants.map(
+                      (
+                        variant,
+                        index
+                      ) => (
+                        <div
+                          key={
+                            variant.id ??
+                            `new-${index}`
+                          }
+                          className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4"
+                        >
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                            {/* Color picker */}
+
+                            <div>
+                              <label className="mb-2 block text-[10px] font-semibold text-neutral-500">
+                                رنگ
+                              </label>
+
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="color"
+                                  value={
+                                    isValidHexColor(
+                                      variant.color ??
+                                        ""
+                                    )
+                                      ? variant.color ??
+                                        "#000000"
+                                      : "#000000"
+                                  }
+                                  onChange={(
+                                    event
+                                  ) =>
+                                    updateVariant(
+                                      index,
+                                      "color",
+                                      event
+                                        .target
+                                        .value
+                                        .toUpperCase()
+                                    )
+                                  }
+                                  className="h-11 w-14 cursor-pointer rounded-xl border border-neutral-200 bg-white p-1"
+                                />
+
+                                <div
+                                  className="h-11 w-11 shrink-0 rounded-xl border border-neutral-200"
+                                  style={{
+                                    backgroundColor:
+                                      isValidHexColor(
+                                        variant.color ??
+                                          ""
+                                      )
+                                        ? variant.color ??
+                                          "#000000"
+                                        : "#ffffff",
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* HEX */}
+
+                            <div className="min-w-0 flex-1">
+                              <label className="mb-2 block text-[10px] font-semibold text-neutral-500">
+                                HEX
+                              </label>
+
+                              <input
+                                type="text"
+                                value={
+                                  variant.color ??
+                                  ""
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  updateVariant(
+                                    index,
+                                    "color",
+                                    event
+                                      .target
+                                      .value
+                                      .toUpperCase()
+                                  )
+                                }
+                                placeholder="#000000"
+                                maxLength={
+                                  7
+                                }
+                                className="h-11 w-full rounded-xl bg-white px-4 text-sm font-mono outline-none transition focus:bg-neutral-100"
+                              />
+                            </div>
+
+                            {/* Stock */}
+
+                            <div className="w-full sm:w-36">
+                              <label className="mb-2 block text-[10px] font-semibold text-neutral-500">
+                                موجودی
+                              </label>
+
+                              <input
+                                type="number"
+                                min={0}
+                                value={
+                                  variant.count
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  updateVariant(
+                                    index,
+                                    "count",
+                                    event
+                                      .target
+                                      .value
+                                  )
+                                }
+                                className="h-11 w-full rounded-xl bg-white px-4 text-sm outline-none transition focus:bg-neutral-100"
+                              />
+                            </div>
+
+                            {/* Remove */}
+
+                            <button
+                              type="button"
+                              disabled={
+                                variants.length <=
+                                1
+                              }
+                              onClick={() =>
+                                removeVariant(
+                                  index
+                                )
+                              }
+                              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                            >
+                              <Trash2
+                                size={
+                                  16
+                                }
+                              />
+                            </button>
+                          </div>
+
+                          {!isValidHexColor(
+                            variant.color ??
+                              ""
+                          ) &&
+                            variant.color && (
+                              <p className="mt-2 text-[10px] font-semibold text-red-500">
+                                رنگ باید به صورت HEX معتبر باشد؛ مثل #FF5858
+                              </p>
+                            )}
+                        </div>
+                      )
+                    )}
+
+                    {/* Add color */}
+
+                    <button
+                      type="button"
+                      onClick={
+                        addVariant
+                      }
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-white text-xs font-bold text-neutral-500 transition hover:border-black hover:text-black"
+                    >
+                      <Plus size={15} />
+                      افزودن رنگ جدید
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-black">
+                          محصول بدون رنگ‌بندی
+                        </p>
+
+                        <p className="mt-1 text-[10px] text-neutral-400">
+                          موجودی کلی محصول را وارد کنید.
+                        </p>
+                      </div>
+
+                      <div className="w-full sm:w-48">
+                        <label className="mb-2 block text-[10px] font-semibold text-neutral-500">
+                          موجودی کل
+                        </label>
+
+                        <input
+                          type="number"
+                          min={0}
+                          value={
+                            variants[0]
+                              ?.count ??
+                            "0"
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updateVariant(
+                              0,
+                              "count",
+                              event.target
+                                .value
+                            )
+                          }
+                          className="h-11 w-full rounded-xl bg-white px-4 text-sm outline-none transition focus:bg-neutral-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Total stock */}
+
+              <div className="mt-4 flex items-center justify-between rounded-xl bg-neutral-100 px-4 py-3">
+                <span className="text-[10px] font-semibold text-neutral-500">
+                  مجموع موجودی
+                </span>
+
+                <span className="text-sm font-bold text-black">
+                  {totalStock.toLocaleString(
+                    "fa-IR"
+                  )}{" "}
+                  عدد
+                </span>
+              </div>
+            </div>
           </section>
 
           {/* Images */}
@@ -1193,10 +1840,18 @@ export default function EditProductPage({
                       <img
                         src={
                           image.isNew
-                            ? ( image.preview ? normalizeImageUrl(image.preview) : "" )
-                            : normalizeImageUrl(image.url)
+                            ? image.preview
+                              ? normalizeImageUrl(
+                                  image.preview
+                                )
+                              : ""
+                            : normalizeImageUrl(
+                                image.url
+                              )
                         }
-                        alt={`${title} - ${index + 1}`}
+                        alt={`${title} - ${
+                          index + 1
+                        }`}
                         className="h-full w-full object-contain"
                       />
 

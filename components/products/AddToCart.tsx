@@ -16,6 +16,7 @@ type CartProduct = {
 type CartItem = {
   id: number;
   productId: number;
+  variantId: number | null;
   quantity: number;
   product?: CartProduct;
 };
@@ -30,11 +31,15 @@ type CartResponse = {
 type Props = {
   productId: number;
   productCount: number;
+  variantId?: number | null;
+  requiresVariant?: boolean;
 };
 
 export default function AddToCart({
   productId,
   productCount,
+  variantId = null,
+  requiresVariant = false,
 }: Props) {
   const [itemId, setItemId] =
     useState<number | null>(null);
@@ -50,6 +55,9 @@ export default function AddToCart({
 
   const [error, setError] =
     useState<string | null>(null);
+
+  const hasSelectedVariant =
+    !requiresVariant || variantId !== null;
 
   const fetchCart = useCallback(async () => {
     try {
@@ -83,13 +91,15 @@ export default function AddToCart({
       const existingItem =
         data.cart.items.find(
           (item) =>
-            item.productId === productId
+            item.productId === productId &&
+            (item.variantId ?? null) ===
+              (variantId ?? null)
         );
 
       if (existingItem) {
         setItemId(existingItem.id);
         setQuantity(
-          existingItem.quantity
+          Number(existingItem.quantity)
         );
       } else {
         setItemId(null);
@@ -107,13 +117,28 @@ export default function AddToCart({
     } finally {
       setLoading(false);
     }
-  }, [productId]);
+  }, [productId, variantId]);
 
   useEffect(() => {
     fetchCart();
   }, [fetchCart]);
 
   const addToCart = async () => {
+    if (
+      requiresVariant &&
+      variantId === null
+    ) {
+      setError("ابتدا رنگ محصول را انتخاب کنید.");
+      return;
+    }
+
+    if (productCount <= 0) {
+      setError(
+        "این محصول در حال حاضر موجود نیست."
+      );
+      return;
+    }
+
     try {
       setUpdating(true);
       setError(null);
@@ -128,6 +153,7 @@ export default function AddToCart({
           },
           body: JSON.stringify({
             productId,
+            variantId,
             quantity: 1,
           }),
         }
@@ -151,10 +177,6 @@ export default function AddToCart({
         );
       }
 
-      /*
-       * API returns the newly created/updated
-       * cart item.
-       */
       setItemId(data.item.id);
 
       setQuantity(
@@ -299,9 +321,34 @@ export default function AddToCart({
   };
 
   /*
-   * Product is out of stock.
+   * A color is required but hasn't been selected yet.
    */
-  if (productCount <= 0) {
+  if (
+    requiresVariant &&
+    variantId === null
+  ) {
+    return (
+      <div className="space-y-3">
+        <div className="flex h-14 w-full items-center justify-center rounded-2xl bg-neutral-100 text-sm font-semibold text-neutral-500">
+          ابتدا رنگ محصول را انتخاب کنید.
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-500">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  /*
+   * Selected variant/product is out of stock.
+   */
+  if (
+    hasSelectedVariant &&
+    productCount <= 0
+  ) {
     return (
       <div className="rounded-2xl bg-neutral-100 px-5 py-4 text-center text-sm font-semibold text-neutral-500">
         این محصول در حال حاضر موجود نیست.
@@ -319,14 +366,12 @@ export default function AddToCart({
   }
 
   /*
-   * Product is already in cart.
+   * Product/variant is already in cart.
    */
   if (itemId !== null && quantity > 0) {
     return (
       <div className="space-y-3">
-
         <div className="flex h-14 items-center justify-between overflow-hidden rounded-2xl bg-black text-white">
-
           <button
             type="button"
             disabled={updating}
@@ -341,7 +386,6 @@ export default function AddToCart({
           </button>
 
           <div className="flex items-center gap-2">
-
             <Check size={16} />
 
             <span className="text-sm font-bold">
@@ -353,7 +397,6 @@ export default function AddToCart({
             <span className="text-xs text-neutral-300">
               عدد در سبد
             </span>
-
           </div>
 
           <button
@@ -371,11 +414,9 @@ export default function AddToCart({
           >
             <Plus size={17} />
           </button>
-
         </div>
 
         <div className="flex items-center justify-between">
-
           <button
             type="button"
             disabled={updating}
@@ -391,7 +432,6 @@ export default function AddToCart({
           >
             مشاهده سبد خرید ←
           </a>
-
         </div>
 
         {error && (
@@ -399,24 +439,21 @@ export default function AddToCart({
             {error}
           </p>
         )}
-
       </div>
     );
   }
 
   /*
-   * Product isn't in cart.
+   * Product/variant isn't in cart.
    */
   return (
     <div className="space-y-3">
-
       <button
         type="button"
         disabled={updating}
         onClick={addToCart}
         className="group flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-black text-sm font-bold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-neutral-800 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
       >
-
         {updating ? (
           <>
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-500 border-t-white" />
@@ -432,7 +469,6 @@ export default function AddToCart({
             افزودن به سبد خرید
           </>
         )}
-
       </button>
 
       {error && (
@@ -440,7 +476,6 @@ export default function AddToCart({
           {error}
         </p>
       )}
-
     </div>
   );
 }

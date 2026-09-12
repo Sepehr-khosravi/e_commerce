@@ -124,6 +124,12 @@ export async function POST(
       }
     ).productId;
 
+    const rawVariantId = (
+      body as {
+        variantId?: unknown;
+      }
+    ).variantId;
+
     const rawQuantity = (
       body as {
         quantity?: unknown;
@@ -131,6 +137,12 @@ export async function POST(
     ).quantity;
 
     const productId = Number(rawProductId);
+
+    const variantId =
+      rawVariantId === undefined ||
+      rawVariantId === null
+        ? null
+        : Number(rawVariantId);
 
     const quantity =
       rawQuantity === undefined
@@ -144,6 +156,19 @@ export async function POST(
       return NextResponse.json(
         {
           error: "Invalid productId",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      variantId !== null &&
+      (!Number.isInteger(variantId) ||
+        variantId <= 0)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Invalid variantId",
         },
         { status: 400 }
       );
@@ -164,7 +189,8 @@ export async function POST(
     const item = await addProductToCart(
       user.id,
       productId,
-      quantity
+      quantity,
+      variantId
     );
 
     return NextResponse.json(

@@ -6,13 +6,24 @@ import {
   deactivateProduct,
   editProduct,
   getProductById,
-  permanentlyRemoveProduct,
 } from "@/app/lib/products/product.service";
 
 interface RouteContext {
   params: Promise<{
     id: string;
   }>;
+}
+
+interface ProductVariantInput {
+  id?: number;
+  color?: string | null;
+  count: number;
+}
+
+function isValidHexColor(
+  color: string
+): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(color);
 }
 
 export async function GET(
@@ -108,10 +119,14 @@ export async function PATCH(
       images?: string[];
       description?: string;
       categoryId?: number;
-      count?: number;
+      variants?: ProductVariantInput[];
       isFeatured?: boolean;
       isActive?: boolean;
     } = {};
+
+    // =========================================================
+    // TITLE
+    // =========================================================
 
     if (body.title !== undefined) {
       if (
@@ -128,6 +143,10 @@ export async function PATCH(
       data.title = body.title.trim();
     }
 
+    // =========================================================
+    // SLUG
+    // =========================================================
+
     if (body.slug !== undefined) {
       if (
         typeof body.slug !== "string"
@@ -142,6 +161,10 @@ export async function PATCH(
 
       data.slug = body.slug.trim();
     }
+
+    // =========================================================
+    // PRICE
+    // =========================================================
 
     if (body.price !== undefined) {
       const price = Number(body.price);
@@ -160,6 +183,10 @@ export async function PATCH(
 
       data.price = price;
     }
+
+    // =========================================================
+    // OFFER
+    // =========================================================
 
     if (body.offer !== undefined) {
       if (
@@ -186,6 +213,10 @@ export async function PATCH(
       }
     }
 
+    // =========================================================
+    // IMAGES
+    // =========================================================
+
     if (body.images !== undefined) {
       if (!Array.isArray(body.images)) {
         return NextResponse.json(
@@ -202,6 +233,10 @@ export async function PATCH(
       );
     }
 
+    // =========================================================
+    // DESCRIPTION
+    // =========================================================
+
     if (body.description !== undefined) {
       if (
         typeof body.description !== "string"
@@ -217,6 +252,10 @@ export async function PATCH(
       data.description =
         body.description;
     }
+
+    // =========================================================
+    // CATEGORY
+    // =========================================================
 
     if (body.categoryId !== undefined) {
       const categoryId = Number(
@@ -238,31 +277,229 @@ export async function PATCH(
       data.categoryId = categoryId;
     }
 
-    if (body.count !== undefined) {
-      const count = Number(body.count);
+    // =========================================================
+    // VARIANTS / COLORS
+    // =========================================================
 
-      if (
-        !Number.isInteger(count) ||
-        count < 0
-      ) {
+    if (body.variants !== undefined) {
+      if (!Array.isArray(body.variants)) {
         return NextResponse.json(
           {
-            error: "Invalid count",
+            error:
+              "Variants must be an array",
           },
           { status: 400 }
         );
       }
 
-      data.count = count;
-    }
+      if (body.variants.length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Product must have at least one variant",
+          },
+          { status: 400 }
+        );
+      }
 
-    if (body.isFeatured !== undefined) {
+      const variants: ProductVariantInput[] =
+        [];
+
+      const colors = new Set<string>();
+
+      let hasColorlessVariant = false;
+      let hasColoredVariant = false;
+
+      for (
+        const variant of body.variants
+      ) {
+        if (
+          typeof variant !== "object" ||
+          variant === null
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "Invalid product variant",
+            },
+            { status: 400 }
+          );
+        }
+
+        // -----------------------------------------------------
+        // Variant ID
+        // -----------------------------------------------------
+
+        let variantId:
+          | number
+          | undefined;
+
+        if (
+          variant.id !== undefined
+        ) {
+          const parsedId = Number(
+            variant.id
+          );
+
+          if (
+            !Number.isInteger(parsedId) ||
+            parsedId <= 0
+          ) {
+            return NextResponse.json(
+              {
+                error:
+                  "Invalid variant ID",
+              },
+              { status: 400 }
+            );
+          }
+
+          variantId = parsedId;
+        }
+
+        // -----------------------------------------------------
+        // Stock
+        // -----------------------------------------------------
+
+        const count = Number(
+          variant.count
+        );
+
+        if (
+          !Number.isInteger(count) ||
+          count < 0
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "Invalid variant count",
+            },
+            { status: 400 }
+          );
+        }
+
+        // -----------------------------------------------------
+        // Color
+        // -----------------------------------------------------
+
+        let color:
+          | string
+          | null = null;
+
+        if (
+          variant.color === null ||
+          variant.color === undefined ||
+          variant.color === ""
+        ) {
+          hasColorlessVariant = true;
+        } else {
+          if (
+            typeof variant.color !==
+            "string"
+          ) {
+            return NextResponse.json(
+              {
+                error:
+                  "Invalid variant color",
+              },
+              { status: 400 }
+            );
+          }
+
+          const normalizedColor =
+            variant.color
+              .trim()
+              .toUpperCase();
+
+          if (
+            !isValidHexColor(
+              normalizedColor
+            )
+          ) {
+            return NextResponse.json(
+              {
+                error:
+                  "Invalid variant color. Color must be a valid HEX value.",
+              },
+              { status: 400 }
+            );
+          }
+
+          if (
+            colors.has(normalizedColor)
+          ) {
+            return NextResponse.json(
+              {
+                error:
+                  "Duplicate variant colors are not allowed",
+              },
+              { status: 400 }
+            );
+          }
+
+          colors.add(normalizedColor);
+
+          color = normalizedColor;
+
+          hasColoredVariant = true;
+        }
+
+        variants.push({
+          ...(variantId !== undefined
+            ? { id: variantId }
+            : {}),
+          color,
+          count,
+        });
+      }
+
+      // -------------------------------------------------------
+      // Do not allow mixing colorless + colored variants
+      // -------------------------------------------------------
+
       if (
-        typeof body.isFeatured !== "boolean"
+        hasColorlessVariant &&
+        hasColoredVariant
       ) {
         return NextResponse.json(
           {
-            error: "Invalid isFeatured",
+            error:
+              "A product cannot have both colored and colorless variants",
+          },
+          { status: 400 }
+        );
+      }
+
+      // Only one colorless variant is allowed
+      if (
+        hasColorlessVariant &&
+        variants.length !== 1
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "A colorless product can only have one variant",
+          },
+          { status: 400 }
+        );
+      }
+
+      data.variants = variants;
+    }
+
+    // =========================================================
+    // FEATURED
+    // =========================================================
+
+    if (body.isFeatured !== undefined) {
+      if (
+        typeof body.isFeatured !==
+        "boolean"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Invalid isFeatured",
           },
           { status: 400 }
         );
@@ -272,9 +509,14 @@ export async function PATCH(
         body.isFeatured;
     }
 
+    // =========================================================
+    // ACTIVE
+    // =========================================================
+
     if (body.isActive !== undefined) {
       if (
-        typeof body.isActive !== "boolean"
+        typeof body.isActive !==
+        "boolean"
       ) {
         return NextResponse.json(
           {
@@ -287,6 +529,10 @@ export async function PATCH(
       data.isActive =
         body.isActive;
     }
+
+    // =========================================================
+    // UPDATE
+    // =========================================================
 
     const product = await editProduct(
       productId,
@@ -320,7 +566,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   context: RouteContext
 ) {
   try {

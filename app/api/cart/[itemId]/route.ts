@@ -61,7 +61,7 @@ export async function PATCH(
     }
 
     const item = await updateCartItem(
-      user!.id,
+      user.id,
       cartItemId,
       quantity
     );
@@ -121,7 +121,7 @@ export async function DELETE(
     }
 
     await removeProductFromCart(
-      user!.id,
+      user.id,
       cartItemId
     );
 

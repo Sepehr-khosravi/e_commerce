@@ -8,13 +8,12 @@ import { requireAdmin } from "@/app/lib/auth/authorization";
 import {
   createNewProduct,
   getAdminProducts,
-  searchProducts,
 } from "@/app/lib/products/product.service";
-
 
 // ======================================================
 // GET - Admin Products
 // ======================================================
+
 export async function GET(
   request: NextRequest
 ) {
@@ -126,7 +125,9 @@ export async function GET(
 // POST - Create Product
 // ======================================================
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest
+) {
   try {
     const { response } = await requireAdmin();
 
@@ -139,30 +140,16 @@ export async function POST(request: NextRequest) {
     const price = Number(body.price);
     const categoryId = Number(body.categoryId);
 
-    const count =
-      body.count === undefined
-        ? 0
-        : Number(body.count);
-
     const offer: number =
       body.offer === undefined ||
       body.offer === null ||
       body.offer === ""
         ? 0
         : Number(body.offer);
-    
-    if (
-      !Number.isFinite(offer) ||
-      offer < 0 ||
-      offer > 100
-    ) {
-      return NextResponse.json(
-        {
-          error: "Offer must be between 0 and 100",
-        },
-        { status: 400 }
-      );
-    }
+
+    // --------------------------------------------------
+    // Basic validation
+    // --------------------------------------------------
 
     if (
       typeof body.title !== "string" ||
@@ -210,61 +197,133 @@ export async function POST(request: NextRequest) {
     }
 
     if (
-      !Number.isInteger(count) ||
-      count < 0
+      !Number.isFinite(offer) ||
+      offer < 0 ||
+      offer > 100
     ) {
       return NextResponse.json(
         {
-          error: "Invalid stock count",
+          error: "Offer must be between 0 and 100",
         },
         { status: 400 }
       );
     }
 
-    // if (
-    //   offer !== null &&
-    //   (!Number.isFinite(offer) || offer < 0)
-    // ) {
-    //   return NextResponse.json(
-    //     {
-    //       error: "Invalid offer",
-    //     },
-    //     { status: 400 }
-    //   );
-    // }
+    // --------------------------------------------------
+    // Variants
+    // --------------------------------------------------
 
-    const images = Array.isArray(body.images)
-      ? body.images.filter(
-          (image: unknown): image is string =>
-            typeof image === "string"
-        )
-      : [];
+    if (!Array.isArray(body.variants) ||
+        body.variants.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "At least one product variant is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const variants = body.variants.map(
+      (variant: unknown) => {
+        if (
+          typeof variant !== "object" ||
+          variant === null
+        ) {
+          throw new Error(
+            "Invalid product variant"
+          );
+        }
+
+        const item =
+          variant as {
+            color?: unknown;
+            count?: unknown;
+          };
+
+        const count =
+          Number(item.count);
+
+        if (
+          !Number.isInteger(count) ||
+          count < 0
+        ) {
+          throw new Error(
+            "Invalid variant stock count"
+          );
+        }
+
+        let color:
+          | string
+          | null = null;
+
+        if (
+          item.color !== undefined &&
+          item.color !== null &&
+          item.color !== ""
+        ) {
+          if (
+            typeof item.color !== "string"
+          ) {
+            throw new Error(
+              "Invalid variant color"
+            );
+          }
+
+          color = item.color;
+        }
+
+        return {
+          color,
+          count,
+        };
+      }
+    );
+
+    // --------------------------------------------------
+    // Other fields
+    // --------------------------------------------------
+
+    const images =
+      Array.isArray(body.images)
+        ? body.images.filter(
+            (
+              image: unknown
+            ): image is string =>
+              typeof image === "string"
+          )
+        : [];
 
     const description =
       typeof body.description === "string"
         ? body.description
         : "";
 
-    const product = await createNewProduct({
-      title: body.title.trim(),
-      slug: body.slug.trim(),
-      price,
-      offer,
-      images,
-      description,
-      categoryId,
-      count,
+    // --------------------------------------------------
+    // Create
+    // --------------------------------------------------
 
-      isFeatured:
-        typeof body.isFeatured === "boolean"
-          ? body.isFeatured
-          : false,
+    const product =
+      await createNewProduct({
+        title: body.title.trim(),
+        slug: body.slug.trim(),
+        price,
+        offer,
+        images,
+        description,
+        categoryId,
+        variants,
 
-      isActive:
-        typeof body.isActive === "boolean"
-          ? body.isActive
-          : true,
-    });
+        isFeatured:
+          typeof body.isFeatured === "boolean"
+            ? body.isFeatured
+            : false,
+
+        isActive:
+          typeof body.isActive === "boolean"
+            ? body.isActive
+            : true,
+      });
 
     return NextResponse.json(
       {

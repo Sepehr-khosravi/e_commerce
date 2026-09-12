@@ -75,6 +75,7 @@ export async function createNewOrder(
 
   const orderItems: Array<{
     productId: number;
+    variantId: number | null;
     productTitle: string;
     productPrice: number;
     offer: number;
@@ -86,19 +87,19 @@ export async function createNewOrder(
 
   for (const item of cart.items) {
     const product = item.product;
-
+  
     if (!product) {
       throw new Error(
         "A product in your cart no longer exists"
       );
     }
-
+  
     if (!product.isActive) {
       throw new Error(
         `${product.title} is no longer available`
       );
     }
-
+  
     if (
       !Number.isInteger(item.quantity) ||
       item.quantity <= 0
@@ -107,20 +108,73 @@ export async function createNewOrder(
         `Invalid quantity for ${product.title}`
       );
     }
-
+  
+    /*
+     * Validate stock based on the selected variant.
+     *
+     * If variantId exists, the variant is the
+     * source of truth for stock.
+     */
+    if (item.variantId !== null) {
+      const variant = item.variant;
+  
+      if (!variant) {
+        throw new Error(
+          `The selected variant for ${product.title} no longer exists`
+        );
+      }
+  
+      if (
+        !variant.isActive ||
+        variant.productId !== product.id
+      ) {
+        throw new Error(
+          `The selected variant for ${product.title} is no longer available`
+        );
+      }
+  
+      if (variant.count <= 0) {
+        throw new Error(
+          `The selected variant for ${product.title} is out of stock`
+        );
+      }
+  
+      if (item.quantity > variant.count) {
+        throw new Error(
+          `Requested quantity exceeds available stock for ${product.title}`
+        );
+      }
+    } else {
+      /*
+       * Products without variants use the
+       * product-level stock.
+       */
+      if (product.count <= 0) {
+        throw new Error(
+          `${product.title} is out of stock`
+        );
+      }
+  
+      if (item.quantity > product.count) {
+        throw new Error(
+          `Requested quantity exceeds available stock for ${product.title}`
+        );
+      }
+    }
+  
     const price = Number(product.price);
-
+  
     const offer =
       product.offer === null
         ? 0
         : Number(product.offer);
-
+  
     if (!Number.isFinite(price) || price < 0) {
       throw new Error(
         `Invalid price for ${product.title}`
       );
     }
-
+  
     if (
       !Number.isFinite(offer) ||
       offer < 0 ||
@@ -130,21 +184,25 @@ export async function createNewOrder(
         `Invalid discount for ${product.title}`
       );
     }
-
+  
     const finalPrice = roundMoney(
       price * (1 - offer / 100)
     );
-
+  
     const totalPrice = roundMoney(
       finalPrice * item.quantity
     );
-
+  
     orderTotal = roundMoney(
       orderTotal + totalPrice
     );
-
+  
     orderItems.push({
       productId: product.id,
+  
+      // مهم: variant را همراه OrderItem ذخیره می‌کنیم
+      variantId: item.variantId,
+  
       productTitle: product.title,
       productPrice: price,
       offer: roundMoney(offer),

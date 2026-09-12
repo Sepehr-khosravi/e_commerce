@@ -18,11 +18,21 @@ type Product = {
   isActive: boolean;
 };
 
+type ProductVariant = {
+  id: number;
+  productId: number;
+  color: string | null;
+  count: number;
+  isActive: boolean;
+};
+
 type CartItemType = {
   id: number;
   quantity: number;
   productId: number;
+  variantId: number | null;
   product: Product;
+  variant: ProductVariant | null;
 };
 
 type Props = {
@@ -46,40 +56,46 @@ export default function CartItem({
   onUpdateQuantity,
 }: Props) {
   const product = item.product;
+  const variant = item.variant;
 
   const price = Number(product.price);
-  
+
   const offer =
     product.offer !== null &&
     product.offer !== undefined
       ? Number(product.offer)
       : 0;
-  
+
   const discount = Math.min(
     Math.max(offer, 0),
     100
   );
-  
+
   const finalPrice =
     price * (1 - discount / 100);
-  
+
   const totalPrice =
-  finalPrice * item.quantity;
+    finalPrice * item.quantity;
 
   const hasOffer =
-    offer !== null &&
     Number.isFinite(offer) &&
     offer > 0 &&
     offer < price;
 
-
-
   const image = product.images?.[0];
 
+  // Variant stock is authoritative when this cart item
+  // belongs to a specific variant.
   const maxQuantity = Math.max(
-    product.count,
+    variant
+      ? variant.count
+      : product.count,
     1
   );
+
+  const hasColor =
+    variant?.color !== null &&
+    variant?.color !== undefined;
 
   return (
     <article className="group rounded-3xl border border-neutral-100 bg-white p-4 transition-all duration-300 hover:border-neutral-200 hover:shadow-[0_10px_35px_rgba(0,0,0,0.04)] sm:p-5">
@@ -118,6 +134,25 @@ export default function CartItem({
               >
                 {product.title}
               </Link>
+
+              {/* Selected color */}
+
+              {hasColor && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] font-medium text-neutral-400">
+                    رنگ
+                  </span>
+
+                  <span
+                    className="h-4 w-4 rounded-full border border-black/10 shadow-sm"
+                    style={{
+                      backgroundColor:
+                        variant.color ?? "#ffffff",
+                    }}
+                    aria-label={`رنگ انتخاب‌شده ${variant.color}`}
+                  />
+                </div>
+              )}
 
               {/* Original price */}
 
@@ -193,7 +228,9 @@ export default function CartItem({
               <button
                 type="button"
                 disabled={
-                  item.quantity >= maxQuantity
+                  item.quantity >= maxQuantity ||
+                  !variant?.isActive &&
+                  item.variantId !== null
                 }
                 onClick={() =>
                   onUpdateQuantity(

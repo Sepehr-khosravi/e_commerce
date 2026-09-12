@@ -51,6 +51,8 @@ export async function findUserCart(
               category: true,
             },
           },
+
+          variant: true,
         },
       },
     },
@@ -106,6 +108,8 @@ export async function createUserCart(
               category: true,
             },
           },
+
+          variant: true,
         },
       },
     },
@@ -127,6 +131,7 @@ export async function findCartItem(
 
     include: {
       product: true,
+      variant: true,
       cart: true,
     },
   });
@@ -134,11 +139,14 @@ export async function findCartItem(
 
 export async function findCartItemByProduct(
   userId: number,
-  productId: number
+  productId: number,
+  variantId: number | null
 ) {
   return prisma.cartItem.findFirst({
     where: {
       productId,
+
+      variantId,
 
       cart: {
         userId,
@@ -147,6 +155,7 @@ export async function findCartItemByProduct(
 
     include: {
       product: true,
+      variant: true,
       cart: true,
     },
   });
@@ -160,11 +169,13 @@ export async function createCartItem(
     data: {
       cartId,
       productId: data.productId,
+      variantId: data.variantId,
       quantity: data.quantity,
     },
 
     include: {
       product: true,
+      variant: true,
     },
   });
 }
@@ -183,6 +194,7 @@ export async function updateCartItemQuantity(
 
     include: {
       product: true,
+      variant: true,
     },
   });
 }
@@ -221,13 +233,55 @@ export async function countUserCartItems(
   });
 }
 
-export async function findProductForCart(productId: number) {
+export async function findProductForCart(
+  productId: number
+) {
   return prisma.product.findUnique({
     where: {
       id: productId,
     },
+
     select: {
       id: true,
+      count: true,
+      isActive: true,
+
+      variants: {
+        where: {
+          isActive: true,
+        },
+
+        select: {
+          id: true,
+          productId: true,
+          color: true,
+          count: true,
+          isActive: true,
+        },
+
+        orderBy: {
+          id: "asc",
+        },
+      },
+    },
+  });
+}
+
+export async function findProductVariantForCart(
+  productId: number,
+  variantId: number
+) {
+  return prisma.productVariant.findFirst({
+    where: {
+      id: variantId,
+      productId,
+      isActive: true,
+    },
+
+    select: {
+      id: true,
+      productId: true,
+      color: true,
       count: true,
       isActive: true,
     },
