@@ -15,30 +15,62 @@ export async function createOrder(
       /*
        * Reserve stock atomically.
        *
-       * If any product doesn't have enough stock,
+       * Products with variants:
+       *   reserve from ProductVariant.count
+       *
+       * Products without variants:
+       *   reserve from Product.count
+       *
+       * If any item does not have enough stock,
        * the entire transaction is rolled back.
        */
-      for (const item of data.items) {
-        const result =
-          await tx.product.updateMany({
-            where: {
-              id: item.productId,
-              isActive: true,
-              count: {
-                gte: item.quantity,
-              },
-            },
-            data: {
-              count: {
-                decrement: item.quantity,
-              },
-            },
-          });
 
-        if (result.count !== 1) {
-          throw new Error(
-            `Product "${item.productTitle}" is no longer available in the requested quantity`
-          );
+      for (const item of data.items) {
+        if (item.variantId !== null) {
+          const result =
+            await tx.productVariant.updateMany({
+              where: {
+                id: item.variantId,
+                productId: item.productId,
+                isActive: true,
+                count: {
+                  gte: item.quantity,
+                },
+              },
+              data: {
+                count: {
+                  decrement: item.quantity,
+                },
+              },
+            });
+
+          if (result.count !== 1) {
+            throw new Error(
+              `Product "${item.productTitle}" is no longer available in the requested quantity`
+            );
+          }
+        } else {
+          const result =
+            await tx.product.updateMany({
+              where: {
+                id: item.productId,
+                isActive: true,
+                count: {
+                  gte: item.quantity,
+                },
+              },
+              data: {
+                count: {
+                  decrement: item.quantity,
+                },
+              },
+            });
+
+          if (result.count !== 1) {
+            throw new Error(
+              `Product "${item.productTitle}" is no longer available in the requested quantity`
+            );
+          }
         }
       }
 
@@ -59,8 +91,9 @@ export async function createOrder(
           items: {
             create: data.items.map(
               (item) => ({
-                productId:
-                  item.productId,
+                productId: item.productId,
+
+                variantId: item.variantId,
 
                 productTitle:
                   item.productTitle,
@@ -107,7 +140,25 @@ export async function findOrderByUser(
     },
 
     include: {
-      items: true,
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              title: true,
+              images: true,
+            },
+          },
+
+          variant: {
+            select: {
+              id: true,
+              color: true,
+            },
+          },
+        },
+      },
+
       payments: true,
     },
   });
@@ -141,7 +192,7 @@ export async function findOrdersByUser(
             skip: 1,
           }
         : {}),
-
+      
       include: {
         items: {
           include: {
@@ -150,6 +201,13 @@ export async function findOrdersByUser(
                 id: true,
                 title: true,
                 images: true,
+              },
+            },
+
+            variant: {
+              select: {
+                id: true,
+                color: true,
               },
             },
           },
@@ -233,7 +291,16 @@ export async function findOrders(
         : {}),
 
       include: {
-        items: true,
+        items: {
+          include: {
+            variant: {
+              select: {
+                id: true,
+                color: true,
+              },
+            },
+          },
+        },
 
         user: {
           select: {
@@ -308,18 +375,33 @@ export async function cancelOrderAndRestoreStock(
       }
 
       for (const item of order.items) {
-        await tx.product.update({
-          where: {
-            id: item.productId,
-          },
-
-          data: {
-            count: {
-              increment:
-                item.quantity,
+        if (item.variantId !== null) {
+          await tx.productVariant.update({
+            where: {
+              id: item.variantId,
             },
-          },
-        });
+
+            data: {
+              count: {
+                increment:
+                  item.quantity,
+              },
+            },
+          });
+        } else {
+          await tx.product.update({
+            where: {
+              id: item.productId,
+            },
+
+            data: {
+              count: {
+                increment:
+                  item.quantity,
+              },
+            },
+          });
+        }
       }
 
       return tx.order.update({
@@ -336,9 +418,19 @@ export async function cancelOrderAndRestoreStock(
   );
 }
 
-export async function findOrderById(orderId: number) {
+/*
+ * Get ONE order by ID.
+ *
+ * ADMIN ONLY.
+ */
+export async function findOrderById(
+  orderId: number
+) {
   return prisma.order.findUnique({
-    where: { id: orderId },
+    where: {
+      id: orderId,
+    },
+
     include: {
       items: {
         include: {
@@ -348,6 +440,13 @@ export async function findOrderById(orderId: number) {
               title: true,
               images: true,
               price: true,
+            },
+          },
+
+          variant: {
+            select: {
+              id: true,
+              color: true,
             },
           },
         },
@@ -375,12 +474,25 @@ export async function updateOrderStatus(
     where: {
       id: orderId,
     },
+
     data: {
       status,
     },
+
     include: {
-      items: true,
+      items: {
+        include: {
+          variant: {
+            select: {
+              id: true,
+              color: true,
+            },
+          },
+        },
+      },
+
       payments: true,
+
       user: {
         select: {
           id: true,
@@ -401,12 +513,25 @@ export async function updatePaymentStatus(
     where: {
       id: orderId,
     },
+
     data: {
       paymentStatus,
     },
+
     include: {
-      items: true,
+      items: {
+        include: {
+          variant: {
+            select: {
+              id: true,
+              color: true,
+            },
+          },
+        },
+      },
+
       payments: true,
+
       user: {
         select: {
           id: true,

@@ -36,12 +36,23 @@ type Product = {
   price: number | string;
   offer: number | string | null;
   images: string[];
+  count: number;
+};
+
+type ProductVariant = {
+  id: number;
+  productId: number;
+  color: string | null;
+  count: number;
+  isActive: boolean;
 };
 
 type CartItem = {
   id: number;
   quantity: number;
   product: Product;
+  variantId: number | null;
+  variant: ProductVariant | null;
 };
 
 type Cart = {
@@ -333,7 +344,6 @@ export default function CheckoutPage() {
 
         {/* Header */}
         <header className="mb-8 sm:mb-10">
-
           <button
             type="button"
             onClick={() =>
@@ -350,7 +360,6 @@ export default function CheckoutPage() {
           </button>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-
             <div>
               <div className="mb-3 flex items-center gap-2 text-xs font-bold text-[#FF5858]">
                 <ShoppingBag size={15} />
@@ -376,16 +385,13 @@ export default function CheckoutPage() {
 
               کالا در سفارش
             </div>
-
           </div>
-
         </header>
 
         <form
           onSubmit={handleSubmit}
           className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6"
         >
-
           {/* Main */}
           <div className="min-w-0 space-y-5">
 
@@ -402,6 +408,7 @@ export default function CheckoutPage() {
                     <p className="text-xs text-neutral-400">
                       مرحله ۱
                     </p>
+
                     <p className="text-sm font-bold text-black">
                       سبد خرید
                     </p>
@@ -419,6 +426,7 @@ export default function CheckoutPage() {
                     <p className="text-xs text-[#FF5858]">
                       مرحله ۲
                     </p>
+
                     <p className="text-sm font-bold text-black">
                       اطلاعات ارسال
                     </p>
@@ -436,6 +444,7 @@ export default function CheckoutPage() {
                     <p className="text-xs text-neutral-400">
                       مرحله ۳
                     </p>
+
                     <p className="text-sm font-bold text-black">
                       پرداخت
                     </p>
@@ -492,8 +501,7 @@ export default function CheckoutPage() {
                         onChange={(event) =>
                           updateField(
                             "firstName",
-                            event.target
-                              .value
+                            event.target.value
                           )
                         }
                         autoComplete="given-name"
@@ -522,13 +530,12 @@ export default function CheckoutPage() {
                         onChange={(event) =>
                           updateField(
                             "lastName",
-                            event.target
-                              .value
+                            event.target.value
                           )
                         }
                         autoComplete="family-name"
                         placeholder="نام خانوادگی"
-                        className="h-12 w-full rounded-2xl border border-neutral-200 bg-[#fafafa] pr-11 pl-4 text-sm font-medium text-black outline-none transition placeholder:text-neutral-300 hover:border-neutral-300 focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5"
+                        className="h-12 w-full rounded-2xl border border-neutral-200 bg-[#fafafa] pr-11 pl-4 text-sm font-medium text-black outline-none transition placeholder:text-neutral-300 hover:border-neutral-300 focus:border-neutral-300 focus:bg-white focus:ring-4 focus:ring-black/5"
                       />
                     </div>
                   </label>
@@ -586,8 +593,7 @@ export default function CheckoutPage() {
                     onChange={(event) =>
                       updateField(
                         "address",
-                        event.target
-                          .value
+                        event.target.value
                       )
                     }
                     rows={5}
@@ -610,7 +616,6 @@ export default function CheckoutPage() {
                 )}
 
               </div>
-
             </section>
 
             {/* Security */}
@@ -633,7 +638,6 @@ export default function CheckoutPage() {
               </div>
 
             </div>
-
           </div>
 
           {/* Summary */}
@@ -664,30 +668,25 @@ export default function CheckoutPage() {
                   </div>
 
                 </div>
-
               </div>
 
               {/* Items */}
               <div className="max-h-[390px] overflow-y-auto p-5 sm:p-6">
 
                 <div className="space-y-5">
-
                   {cart.items.map(
                     (item) => {
                       const price =
                         Number(
-                          item.product
-                            .price
+                          item.product.price
                         );
 
                       const offer =
-                        item.product
-                          .offer ===
+                        item.product.offer ===
                         null
                           ? 0
                           : Number(
-                              item.product
-                                .offer
+                              item.product.offer
                             );
 
                       const finalPrice =
@@ -701,15 +700,17 @@ export default function CheckoutPage() {
                         item.quantity;
 
                       const image =
-                        item.product
-                          .images?.[0];
+                        item.product.images?.[0];
+
+                      const variantColor =
+                        item.variant?.color ??
+                        null;
 
                       return (
                         <div
                           key={item.id}
                           className="flex gap-3"
                         >
-
                           {/* Product image */}
                           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-neutral-100">
 
@@ -738,13 +739,26 @@ export default function CheckoutPage() {
 
                             <p className="line-clamp-2 text-xs font-bold leading-5 text-black sm:text-sm">
                               {
-                                item
-                                  .product
+                                item.product
                                   .title
                               }
                             </p>
 
                             <div className="mt-1.5 flex flex-wrap items-center gap-2">
+
+                              {variantColor && (
+                                <span className="inline-flex items-center gap-1.5 rounded-md bg-neutral-50 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full border border-black/10"
+                                    style={{
+                                      backgroundColor:
+                                        variantColor,
+                                    }}
+                                  />
+
+                                  رنگ
+                                </span>
+                              )}
 
                               {offer > 0 && (
                                 <span className="rounded-md bg-green-50 px-1.5 py-0.5 text-[10px] font-bold text-green-600">
@@ -757,30 +771,26 @@ export default function CheckoutPage() {
 
                             </div>
 
+                            <div className="mt-2">
+                              <p className="text-xs font-black text-black sm:text-sm">
+                                {Math.round(
+                                  itemTotal
+                                ).toLocaleString(
+                                  "fa-IR"
+                                )}
+                              </p>
+
+                              <p className="mt-0.5 text-[10px] text-neutral-400">
+                                تومان
+                              </p>
+                            </div>
+
                           </div>
-
-                          {/* Price */}
-                          <div className="shrink-0 text-left">
-                            <p className="text-xs font-black text-black sm:text-sm">
-                              {Math.round(
-                                itemTotal
-                              ).toLocaleString(
-                                "fa-IR"
-                              )}
-                            </p>
-
-                            <p className="mt-0.5 text-[10px] text-neutral-400">
-                              تومان
-                            </p>
-                          </div>
-
                         </div>
                       );
                     }
                   )}
-
                 </div>
-
               </div>
 
               {/* Price */}
@@ -844,11 +854,13 @@ export default function CheckoutPage() {
                   {submitting ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+
                       در حال آماده‌سازی پرداخت...
                     </>
                   ) : (
                     <>
                       ادامه و پرداخت
+
                       <ArrowLeft
                         size={17}
                         className="transition-transform group-hover:-translate-x-1"
@@ -860,28 +872,25 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    router.push(
-                      "/cart"
-                    )
+                    router.push("/cart")
                   }
                   disabled={submitting}
                   className="mt-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 text-sm font-bold text-black transition hover:bg-neutral-50 disabled:opacity-50"
                 >
                   <ChevronLeft size={16} />
+
                   ویرایش سبد خرید
                 </button>
 
                 <div className="mt-5 flex items-center justify-center gap-2 text-[10px] text-neutral-400">
                   <ShieldCheck size={13} />
+
                   پرداخت امن و محافظت‌شده
                 </div>
 
               </div>
-
             </div>
-
           </aside>
-
         </form>
       </div>
     </main>

@@ -1,6 +1,7 @@
 export interface AddToCartData {
   userId: number;
   productId: number;
+  variantId: number | null;
   quantity: number;
 }
 

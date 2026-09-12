@@ -2,6 +2,8 @@ import { prisma } from "../prisma";
 
 import type {
   CreateProductData,
+  ProductPagination,
+  ProductSort,
   SearchProductsOptions,
   UpdateProductData,
 } from "./product.types";
@@ -50,6 +52,10 @@ function decodeCursor(
   }
 }
 
+/* =========================================================
+   ADMIN PRODUCTS
+   ========================================================= */
+
 export async function findAdminProducts(options: {
   query?: string;
   categoryId?: number;
@@ -91,19 +97,21 @@ export async function findAdminProducts(options: {
   }
 
   if (decodedCursor) {
+    const cursorDate = new Date(
+      decodedCursor.value!
+    );
+
     if (sort === "newest") {
       where.OR = [
         {
           createdAt: {
-            lt: new Date(decodedCursor.value!),
+            lt: cursorDate,
           },
         },
         {
           AND: [
             {
-              createdAt: new Date(
-                decodedCursor.value!
-              ),
+              createdAt: cursorDate,
             },
             {
               id: {
@@ -117,15 +125,13 @@ export async function findAdminProducts(options: {
       where.OR = [
         {
           createdAt: {
-            gt: new Date(decodedCursor.value!),
+            gt: cursorDate,
           },
         },
         {
           AND: [
             {
-              createdAt: new Date(
-                decodedCursor.value!
-              ),
+              createdAt: cursorDate,
             },
             {
               id: {
@@ -159,10 +165,14 @@ export async function findAdminProducts(options: {
 
   const products = await prisma.product.findMany({
     where,
+
     take: limit + 1,
+
     orderBy,
+
     include: {
       category: true,
+      variants: true,
     },
   });
 
@@ -195,7 +205,13 @@ export async function findAdminProducts(options: {
   };
 }
 
-export async function findProductById(id: number) {
+/* =========================================================
+   SINGLE PRODUCT
+   ========================================================= */
+
+export async function findProductById(
+  id: number
+) {
   return prisma.product.findUnique({
     where: {
       id,
@@ -203,11 +219,14 @@ export async function findProductById(id: number) {
 
     include: {
       category: true,
+      variants: true,
     },
   });
 }
 
-export async function findProductBySlug(slug: string) {
+export async function findProductBySlug(
+  slug: string
+) {
   return prisma.product.findUnique({
     where: {
       slug,
@@ -215,13 +234,18 @@ export async function findProductBySlug(slug: string) {
 
     include: {
       category: true,
+      variants: true,
     },
   });
 }
 
+/* =========================================================
+   PUBLIC PRODUCTS
+   ========================================================= */
+
 export async function findProducts(
   options: SearchProductsOptions
-) {
+): Promise<ProductPagination> {
   const {
     query,
     categoryId,
@@ -244,7 +268,7 @@ export async function findProducts(
         }
       : {}),
 
-    ...(categoryId
+    ...(categoryId !== undefined
       ? {
           categoryId,
         }
@@ -279,24 +303,20 @@ export async function findProducts(
   }
 
   /*
-   * Every sort uses TWO fields:
+   * Cursor pagination always uses:
    *
-   * 1. The actual sorting field.
-   * 2. id as a stable tie-breaker.
+   * sorting field + id
    *
-   * This prevents products with equal prices,
-   * equal purchase counts, etc. from being skipped.
+   * id is the stable tie-breaker.
    */
 
   switch (sort) {
     case "oldest": {
       if (decodedCursor) {
-        const cursorId = decodedCursor.id;
-
         where.OR = [
           {
             id: {
-              gt: cursorId,
+              gt: decodedCursor.id,
             },
           },
         ];
@@ -307,12 +327,10 @@ export async function findProducts(
 
     case "newest": {
       if (decodedCursor) {
-        const cursorId = decodedCursor.id;
-
         where.OR = [
           {
             id: {
-              lt: cursorId,
+              lt: decodedCursor.id,
             },
           },
         ];
@@ -323,17 +341,23 @@ export async function findProducts(
 
     case "price_asc": {
       if (decodedCursor) {
-        const cursorId = decodedCursor.id;
-        const cursorValue = decodedCursor.value;
-
-        if (cursorValue === undefined) {
-          throw new Error("Invalid price cursor");
+        if (
+          decodedCursor.value ===
+          undefined
+        ) {
+          throw new Error(
+            "Invalid price cursor"
+          );
         }
 
-        const cursorPrice = Number(cursorValue);
+        const cursorPrice = Number(
+          decodedCursor.value
+        );
 
         if (!Number.isFinite(cursorPrice)) {
-          throw new Error("Invalid price cursor");
+          throw new Error(
+            "Invalid price cursor"
+          );
         }
 
         where.OR = [
@@ -349,7 +373,7 @@ export async function findProducts(
               },
               {
                 id: {
-                  gt: cursorId,
+                  gt: decodedCursor.id,
                 },
               },
             ],
@@ -362,17 +386,23 @@ export async function findProducts(
 
     case "price_desc": {
       if (decodedCursor) {
-        const cursorId = decodedCursor.id;
-        const cursorValue = decodedCursor.value;
-
-        if (cursorValue === undefined) {
-          throw new Error("Invalid price cursor");
+        if (
+          decodedCursor.value ===
+          undefined
+        ) {
+          throw new Error(
+            "Invalid price cursor"
+          );
         }
 
-        const cursorPrice = Number(cursorValue);
+        const cursorPrice = Number(
+          decodedCursor.value
+        );
 
         if (!Number.isFinite(cursorPrice)) {
-          throw new Error("Invalid price cursor");
+          throw new Error(
+            "Invalid price cursor"
+          );
         }
 
         where.OR = [
@@ -388,7 +418,7 @@ export async function findProducts(
               },
               {
                 id: {
-                  lt: cursorId,
+                  lt: decodedCursor.id,
                 },
               },
             ],
@@ -401,20 +431,23 @@ export async function findProducts(
 
     case "popular": {
       if (decodedCursor) {
-        const cursorId = decodedCursor.id;
-        const cursorValue = decodedCursor.value;
-
-        if (cursorValue === undefined) {
+        if (
+          decodedCursor.value ===
+          undefined
+        ) {
           throw new Error(
             "Invalid popularity cursor"
           );
         }
 
-        const cursorPurchaseCount = Number(
-          cursorValue
-        );
+        const cursorPurchaseCount =
+          Number(decodedCursor.value);
 
-        if (!Number.isFinite(cursorPurchaseCount)) {
+        if (
+          !Number.isFinite(
+            cursorPurchaseCount
+          )
+        ) {
           throw new Error(
             "Invalid popularity cursor"
           );
@@ -434,7 +467,7 @@ export async function findProducts(
               },
               {
                 id: {
-                  lt: cursorId,
+                  lt: decodedCursor.id,
                 },
               },
             ],
@@ -503,19 +536,22 @@ export async function findProducts(
       break;
   }
 
-  const products = await prisma.product.findMany({
-    where,
+  const products =
+    await prisma.product.findMany({
+      where,
 
-    take: limit + 1,
+      take: limit + 1,
 
-    orderBy,
+      orderBy,
 
-    include: {
-      category: true,
-    },
-  });
+      include: {
+        category: true,
+        variants: true,
+      },
+    });
 
-  const hasNextPage = products.length > limit;
+  const hasNextPage =
+    products.length > limit;
 
   if (hasNextPage) {
     products.pop();
@@ -523,7 +559,10 @@ export async function findProducts(
 
   let nextCursor: string | null = null;
 
-  if (hasNextPage && products.length > 0) {
+  if (
+    hasNextPage &&
+    products.length > 0
+  ) {
     const lastProduct =
       products[products.length - 1];
 
@@ -532,14 +571,16 @@ export async function findProducts(
       case "price_desc":
         nextCursor = encodeCursor({
           id: lastProduct.id,
-          value: lastProduct.price.toString(),
+          value:
+            lastProduct.price.toString(),
         });
         break;
 
       case "popular":
         nextCursor = encodeCursor({
           id: lastProduct.id,
-          value: lastProduct.purchaseCount.toString(),
+          value:
+            lastProduct.purchaseCount.toString(),
         });
         break;
 
@@ -560,15 +601,33 @@ export async function findProducts(
   };
 }
 
-export async function findPopularProducts(limit: number) {
+/* =========================================================
+   SPECIAL PRODUCT QUERIES
+   ========================================================= */
+
+export async function findPopularProducts(
+  limit: number
+) {
   return prisma.product.findMany({
     where: {
       isActive: true,
     },
-    orderBy: {
-      purchaseCount: "desc",
-    },
+
+    orderBy: [
+      {
+        purchaseCount: "desc",
+      },
+      {
+        id: "desc",
+      },
+    ],
+
     take: limit,
+
+    include: {
+      category: true,
+      variants: true,
+    },
   });
 }
 
@@ -589,6 +648,7 @@ export async function findFeaturedProducts(
 
     include: {
       category: true,
+      variants: true,
     },
   });
 }
@@ -601,22 +661,32 @@ export async function findNewestProducts(
       isActive: true,
     },
 
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: [
+      {
+        createdAt: "desc",
+      },
+      {
+        id: "desc",
+      },
+    ],
 
     take: limit,
 
     include: {
       category: true,
+      variants: true,
     },
   });
 }
 
+/* =========================================================
+   CREATE PRODUCT
+   ========================================================= */
+
 export async function createProduct(
   data: CreateProductData
 ) {
-  return await prisma.product.create({
+  return prisma.product.create({
     data: {
       title: data.title,
       slug: data.slug,
@@ -630,42 +700,271 @@ export async function createProduct(
 
       categoryId: data.categoryId,
 
-      count: data.count ?? 0,
+      isFeatured:
+        data.isFeatured ?? false,
 
-      isFeatured: data.isFeatured ?? false,
-      isActive: data.isActive ?? true,
+      isActive:
+        data.isActive ?? true,
+
+      variants: {
+        create: data.variants.map(
+          (variant) => ({
+            color:
+              variant.color ?? null,
+
+            count: variant.count,
+          })
+        ),
+      },
     },
 
     include: {
       category: true,
+      variants: true,
     },
   });
 }
+
+/* =========================================================
+   UPDATE PRODUCT
+   ========================================================= */
 
 export async function updateProduct(
   id: number,
   data: UpdateProductData
 ) {
-  return prisma.product.update({
-    where: {
-      id,
-    },
+  return prisma.$transaction(
+    async (tx) => {
+      /*
+       * Product scalar fields.
+       *
+       * variants are intentionally handled separately
+       * because they have their own records.
+       */
 
-    data,
+      const product = await tx.product.update(
+        {
+          where: {
+            id,
+          },
 
-    include: {
-      category: true,
-    },
-  });
+          data: {
+            ...(data.title !== undefined
+              ? {
+                  title: data.title,
+                }
+              : {}),
+
+            ...(data.slug !== undefined
+              ? {
+                  slug: data.slug,
+                }
+              : {}),
+
+            ...(data.price !== undefined
+              ? {
+                  price: data.price,
+                }
+              : {}),
+
+            ...(data.offer !== undefined
+              ? {
+                  offer: data.offer,
+                }
+              : {}),
+
+            ...(data.images !== undefined
+              ? {
+                  images: data.images,
+                }
+              : {}),
+
+            ...(data.description !== undefined
+              ? {
+                  description:
+                    data.description,
+                }
+              : {}),
+
+            ...(data.categoryId !== undefined
+              ? {
+                  categoryId:
+                    data.categoryId,
+                }
+              : {}),
+
+            ...(data.isFeatured !== undefined
+              ? {
+                  isFeatured:
+                    data.isFeatured,
+                }
+              : {}),
+
+            ...(data.isActive !== undefined
+              ? {
+                  isActive:
+                    data.isActive,
+                }
+              : {}),
+          },
+        }
+      );
+
+      /*
+       * If variants were not supplied,
+       * don't touch the existing variants.
+       */
+
+      if (data.variants !== undefined) {
+        const existingVariants =
+          await tx.productVariant.findMany(
+            {
+              where: {
+                productId: id,
+              },
+
+              include: {
+                _count: {
+                  select: {
+                    cartItems: true,
+                    orderItems: true,
+                  },
+                },
+              },
+            }
+          );
+
+        const existingVariantIds =
+          new Set(
+            existingVariants.map(
+              (variant) => variant.id
+            )
+          );
+
+        const incomingVariantIds =
+          new Set<number>();
+
+        /*
+         * Update existing variants and
+         * create new variants.
+         */
+
+        for (const variant of data.variants) {
+          if (variant.id !== undefined) {
+            /*
+             * Prevent modifying another product's variant.
+             */
+            if (
+              !existingVariantIds.has(
+                variant.id
+              )
+            ) {
+              throw new Error(
+                `Variant ${variant.id} does not belong to product ${id}`
+              );
+            }
+
+            incomingVariantIds.add(
+              variant.id
+            );
+
+            await tx.productVariant.update(
+              {
+                where: {
+                  id: variant.id,
+                },
+
+                data: {
+                  color:
+                    variant.color ??
+                    null,
+
+                  count: variant.count,
+                },
+              }
+            );
+          } else {
+            await tx.productVariant.create({
+              data: {
+                productId: id,
+
+                color:
+                  variant.color ??
+                  null,
+
+                count: variant.count,
+              },
+            });
+          }
+        }
+
+        /*
+         * Variants that are no longer present
+         * in the new list should be removed.
+         *
+         * But a variant referenced by a cart/order
+         * cannot safely be deleted.
+         */
+
+        for (const existingVariant of existingVariants) {
+          if (
+            incomingVariantIds.has(
+              existingVariant.id
+            )
+          ) {
+            continue;
+          }
+
+          const isReferenced =
+            existingVariant._count
+              .cartItems > 0 ||
+            existingVariant._count
+              .orderItems > 0;
+
+          if (isReferenced) {
+            throw new Error(
+              `Variant ${existingVariant.id} is already used by a cart or order and cannot be removed`
+            );
+          }
+
+          await tx.productVariant.delete(
+            {
+              where: {
+                id: existingVariant.id,
+              },
+            }
+          );
+        }
+      }
+
+      return tx.product.findUniqueOrThrow({
+        where: {
+          id: product.id,
+        },
+
+        include: {
+          category: true,
+          variants: true,
+        },
+      });
+    }
+  );
 }
 
-export async function deleteProduct(id: number) {
+/* =========================================================
+   PRODUCT STATUS
+   ========================================================= */
+
+export async function deleteProduct(
+  id: number
+) {
   /*
-   * We don't actually delete the product.
+   * Soft delete.
    *
-   * Setting isActive=false keeps the product available
-   * for historical order records.
+   * Historical orders still keep their
+   * product/variant references.
    */
+
   return prisma.product.update({
     where: {
       id,
@@ -673,6 +972,11 @@ export async function deleteProduct(id: number) {
 
     data: {
       isActive: false,
+    },
+
+    include: {
+      category: true,
+      variants: true,
     },
   });
 }
@@ -699,23 +1003,54 @@ export async function setProductFeatured(
     data: {
       isFeatured,
     },
+
+    include: {
+      category: true,
+      variants: true,
+    },
   });
 }
 
-export async function updateProductStock(
-  id: number,
-  count: number
+/* =========================================================
+   VARIANT STOCK
+   ========================================================= */
+
+export async function findProductVariantById(
+  id: number
 ) {
-  return prisma.product.update({
+  return prisma.productVariant.findUnique({
     where: {
       id,
+    },
+
+    include: {
+      product: true,
+    },
+  });
+}
+
+export async function updateProductVariantStock(
+  variantId: number,
+  count: number
+) {
+  return prisma.productVariant.update({
+    where: {
+      id: variantId,
     },
 
     data: {
       count,
     },
+
+    include: {
+      product: true,
+    },
   });
 }
+
+/* =========================================================
+   PURCHASE COUNT
+   ========================================================= */
 
 export async function incrementPurchaseCount(
   id: number,

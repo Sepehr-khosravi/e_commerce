@@ -14,6 +14,13 @@ import AddToCart from "@/components/products/AddToCart";
 import RelatedProducts from "@/components/products/RelatedProducts";
 import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
 
+type ProductVariant = {
+  id: number;
+  color: string | null;
+  count: number;
+  isActive: boolean;
+};
+
 type Product = {
   id: number;
   title: string;
@@ -22,7 +29,12 @@ type Product = {
   offer: number | string | null;
   images: string[];
   description: string;
-  count: number;
+
+  // Kept optional for backward compatibility.
+  count?: number;
+
+  variants: ProductVariant[];
+
   purchaseCount: number;
   isFeatured: boolean;
   isActive: boolean;
@@ -95,6 +107,15 @@ export default function ProductPage({
 
   /*
    * ============================================================
+   * SELECTED VARIANT
+   * ============================================================
+   */
+
+  const [selectedVariantId, setSelectedVariantId] =
+    useState<number | null>(null);
+
+  /*
+   * ============================================================
    * LOAD PRODUCT
    * ============================================================
    */
@@ -127,7 +148,31 @@ export default function ProductPage({
 
         const result: ProductResponse = data;
 
-        setProduct(result.product);
+        const loadedProduct = {
+          ...result.product,
+          variants:
+            result.product.variants ?? [],
+        };
+
+        setProduct(loadedProduct);
+
+        /*
+         * Select the first available colored variant.
+         *
+         * For products without colors, selectedVariantId
+         * remains null.
+         */
+        const firstAvailableVariant =
+          loadedProduct.variants.find(
+            (variant) =>
+              variant.isActive &&
+              variant.count > 0 &&
+              variant.color !== null
+          );
+
+        setSelectedVariantId(
+          firstAvailableVariant?.id ?? null
+        );
       } catch (error) {
         console.error(
           "Product page error:",
@@ -350,7 +395,94 @@ export default function ProductPage({
   const discount =
     getDiscountPercent(offer);
 
-  const available = product.count > 0;
+  /*
+   * ============================================================
+   * VARIANTS / STOCK
+   * ============================================================
+   */
+
+  const variants =
+    product.variants ?? [];
+
+  const colorVariants =
+    variants.filter(
+      (variant) =>
+        variant.isActive &&
+        variant.color !== null
+    );
+
+  const hasColors =
+    colorVariants.length > 0;
+
+  const selectedVariant =
+    variants.find(
+      (variant) =>
+        variant.id === selectedVariantId
+    ) ?? null;
+
+  /*
+   * Total stock is only used for products
+   * without colors.
+   */
+  const totalStock = variants.length
+    ? variants.reduce(
+        (total, variant) =>
+          total +
+          (variant.isActive
+            ? variant.count
+            : 0),
+        0
+      )
+    : Number(product.count ?? 0);
+
+  /*
+   * Stock belonging to the currently
+   * selected variant.
+   */
+  const selectedVariantStock =
+    selectedVariant?.isActive
+      ? selectedVariant.count
+      : 0;
+
+  /*
+   * Stock that AddToCart should use.
+   */
+  const productCount = hasColors
+    ? selectedVariantStock
+    : totalStock;
+
+  /*
+   * There is at least one purchasable
+   * variant somewhere in the product.
+   */
+  const hasAnyStock = hasColors
+    ? colorVariants.some(
+        (variant) =>
+          variant.count > 0
+      )
+    : totalStock > 0;
+
+  /*
+   * User has to select a color before
+   * purchasing a colored product.
+   */
+  const requiresVariantSelection =
+    hasColors &&
+    selectedVariantId === null;
+
+  /*
+   * Product can actually be added
+   * to cart right now.
+   */
+  const available =
+    !requiresVariantSelection &&
+    productCount > 0;
+
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
 
   return (
     <main
@@ -359,7 +491,7 @@ export default function ProductPage({
         min-h-screen
         bg-white
         ${
-          available
+          hasAnyStock
             ? "pb-28 lg:pb-0"
             : ""
         }
@@ -543,6 +675,112 @@ export default function ProductPage({
 
             </div>
 
+            {hasColors && (
+  <div className="mt-6">
+    <div className="mb-3 text-xs font-semibold text-neutral-700">
+      انتخاب رنگ
+    </div>
+
+    <div className="flex flex-wrap items-center gap-3">
+      {colorVariants.map((variant) => {
+        const isSelected =
+          selectedVariantId === variant.id;
+
+        const isOutOfStock =
+          variant.count <= 0;
+
+        return (
+          <button
+            key={variant.id}
+            type="button"
+            disabled={isOutOfStock}
+            onClick={() =>
+              setSelectedVariantId(variant.id)
+            }
+            aria-label={`انتخاب رنگ ${variant.color}`}
+            aria-pressed={isSelected}
+            className={`
+              group
+              relative
+              flex
+              h-10
+              w-10
+              items-center
+              justify-center
+              rounded-full
+              transition-all
+              duration-200
+              disabled:cursor-not-allowed
+              ${
+                isSelected
+                  ? "scale-110"
+                  : "hover:scale-105"
+              }
+              ${
+                isOutOfStock
+                  ? "opacity-30"
+                  : ""
+              }
+            `}
+          >
+            {/* حلقه انتخاب */}
+            <span
+              className={`
+                absolute
+                inset-0
+                rounded-full
+                border
+                transition-all
+                duration-200
+                ${
+                  isSelected
+                    ? "border-black"
+                    : "border-neutral-200 group-hover:border-neutral-400"
+                }
+              `}
+            />
+
+            {/* خود رنگ */}
+            <span
+              className="
+                h-7
+                w-7
+                rounded-full
+                border
+                border-black/10
+                shadow-sm
+                transition-transform
+                duration-200
+              "
+              style={{
+                backgroundColor:
+                  variant.color ?? "#ffffff",
+              }}
+            />
+
+            {/* خط روی رنگ ناموجود */}
+            {isOutOfStock && (
+              <span
+                className="
+                  absolute
+                  left-1/2
+                  top-1/2
+                  h-px
+                  w-8
+                  -translate-x-1/2
+                  -translate-y-1/2
+                  rotate-45
+                  bg-neutral-500
+                "
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+)}
+
             {/* ==================================================
                 STOCK + SHIPPING
             ================================================== */}
@@ -550,24 +788,42 @@ export default function ProductPage({
             <div className="mt-4 grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:gap-3">
 
               <div className="flex items-center gap-2 rounded-xl bg-neutral-50 px-3 py-3 sm:px-4">
+
                 <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${
-                    available
-                      ? "bg-black"
-                      : "bg-neutral-300"
-                  }`}
+                  className={`
+                    h-2
+                    w-2
+                    shrink-0
+                    rounded-full
+                    ${
+                      available
+                        ? "bg-black"
+                        : "bg-neutral-300"
+                    }
+                  `}
                 />
 
                 <span className="truncate text-[10px] font-semibold text-neutral-600 sm:text-xs">
-                  {available
-                    ? `موجود — ${formatPrice(
-                        product.count
-                      )} عدد`
-                    : "ناموجود"}
+
+                  {hasColors
+                    ? requiresVariantSelection
+                      ? "لطفاً رنگ را انتخاب کنید"
+                      : selectedVariantStock > 0
+                        ? `موجود — ${formatPrice(
+                            selectedVariantStock
+                          )} عدد`
+                        : "ناموجود"
+                    : totalStock > 0
+                      ? `موجود — ${formatPrice(
+                          totalStock
+                        )} عدد`
+                      : "ناموجود"}
+
                 </span>
               </div>
 
               <div className="flex items-center gap-2 rounded-xl bg-neutral-50 px-3 py-3 sm:px-4">
+
                 <Truck
                   size={14}
                   className="shrink-0 text-neutral-400"
@@ -576,6 +832,7 @@ export default function ProductPage({
                 <span className="truncate text-[10px] font-semibold text-neutral-600 sm:text-xs">
                   ارسال سریع
                 </span>
+
               </div>
 
             </div>
@@ -585,10 +842,20 @@ export default function ProductPage({
             ================================================== */}
 
             <div className="mt-5 hidden lg:block">
+
               <AddToCart
                 productId={product.id}
-                productCount={product.count}
+                productCount={productCount}
+                variantId={
+                  hasColors
+                    ? selectedVariantId
+                    : null
+                }
+                requiresVariant={
+                  hasColors
+                }
               />
+
             </div>
 
             {/* ==================================================
@@ -647,7 +914,7 @@ export default function ProductPage({
           MOBILE FIXED ADD TO CART
           ======================================================== */}
 
-      {available && (
+      {hasAnyStock && (
         <div
           className="
             fixed
@@ -672,11 +939,13 @@ export default function ProductPage({
 
             {/* Price */}
             <div className="min-w-0 shrink-0">
+
               <p className="text-[9px] font-medium text-neutral-400">
                 قیمت نهایی
               </p>
 
               <div className="mt-0.5 flex items-baseline gap-1">
+
                 <span className="text-base font-black text-black sm:text-lg">
                   {formatPrice(finalPrice)}
                 </span>
@@ -684,15 +953,27 @@ export default function ProductPage({
                 <span className="text-[9px] font-medium text-neutral-400">
                   تومان
                 </span>
+
               </div>
+
             </div>
 
             {/* Cart */}
             <div className="min-w-0 flex-1">
+
               <AddToCart
                 productId={product.id}
-                productCount={product.count}
+                productCount={productCount}
+                variantId={
+                  hasColors
+                    ? selectedVariantId
+                    : null
+                }
+                requiresVariant={
+                  hasColors
+                }
               />
+
             </div>
 
           </div>

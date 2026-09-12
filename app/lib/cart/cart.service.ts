@@ -7,6 +7,7 @@ import {
   findCartItem,
   findCartItemByProduct,
   findProductForCart,
+  findProductVariantForCart,
   findUserCart,
   updateCartItemQuantity,
 } from "./cart.repository";
@@ -53,10 +54,6 @@ export async function getUserCart(
     limit,
   });
 
-  /*
-   * Create an empty cart for the user
-   * if they don't have one yet.
-   */
   if (!cart && cursor === undefined) {
     await createUserCart(userId);
 
@@ -65,10 +62,6 @@ export async function getUserCart(
     });
   }
 
-  /*
-   * A cursor was supplied but the user
-   * doesn't have a cart.
-   */
   if (!cart) {
     return {
       id: 0,
@@ -85,7 +78,8 @@ export async function getUserCart(
 export async function addProductToCart(
   userId: number,
   productId: number,
-  quantity = 1
+  quantity = 1,
+  variantId: number | null = null
 ) {
   if (!Number.isInteger(userId) || userId <= 0) {
     throw new Error("Invalid user ID");
@@ -98,15 +92,26 @@ export async function addProductToCart(
     throw new Error("Invalid product ID");
   }
 
-  if (!Number.isInteger(quantity) || quantity <= 0) {
+  if (
+    variantId !== null &&
+    (!Number.isInteger(variantId) ||
+      variantId <= 0)
+  ) {
+    throw new Error("Invalid variant ID");
+  }
+
+  if (
+    !Number.isInteger(quantity) ||
+    quantity <= 0
+  ) {
     throw new Error(
       "Quantity must be greater than zero"
     );
   }
 
   /*
-   * Make sure the product actually exists
-   * and is available for purchase.
+   * Make sure the product exists and
+   * is available for purchase.
    */
   const product =
     await findProductForCart(productId);
@@ -121,17 +126,67 @@ export async function addProductToCart(
     );
   }
 
-  if (product.count <= 0) {
+  /*
+   * Products with variants must use a valid
+   * active variant.
+   */
+  const hasVariants =
+    product.variants.length > 0;
+
+  if (hasVariants && variantId === null) {
     throw new Error(
-      "This product is out of stock"
+      "Please select a product variant"
     );
   }
 
   /*
-   * The requested quantity can never be
-   * greater than the available stock.
+   * Products without variants cannot receive
+   * a variant ID.
    */
-  if (quantity > product.count) {
+  if (!hasVariants && variantId !== null) {
+    throw new Error(
+      "This product does not have variants"
+    );
+  }
+
+  let availableStock: number;
+
+  if (variantId !== null) {
+    const variant =
+      await findProductVariantForCart(
+        productId,
+        variantId
+      );
+
+    if (!variant) {
+      throw new Error(
+        "Product variant not found"
+      );
+    }
+
+    availableStock = variant.count;
+
+    if (availableStock <= 0) {
+      throw new Error(
+        "This product variant is out of stock"
+      );
+    }
+  } else {
+    availableStock = product.count;
+
+    if (availableStock <= 0) {
+      throw new Error(
+        "This product is out of stock"
+      );
+    }
+  }
+
+  /*
+   * The requested quantity can never exceed
+   * the available stock of the selected
+   * product/variant.
+   */
+  if (quantity > availableStock) {
     throw new Error(
       "Requested quantity exceeds available stock"
     );
@@ -143,24 +198,25 @@ export async function addProductToCart(
   const cart = await getUserCart(userId);
 
   /*
-   * Check whether this product is already
-   * inside the cart.
+   * A cart item is unique by:
+   *
+   * product + variant
+   *
+   * This allows the same product to have
+   * different colors in the cart.
    */
   const existingItem =
     await findCartItemByProduct(
       userId,
-      productId
+      productId,
+      variantId
     );
 
   if (existingItem) {
     const newQuantity =
       existingItem.quantity + quantity;
 
-    /*
-     * Make sure the total quantity in the
-     * cart doesn't exceed current stock.
-     */
-    if (newQuantity > product.count) {
+    if (newQuantity > availableStock) {
       throw new Error(
         "Requested quantity exceeds available stock"
       );
@@ -174,8 +230,7 @@ export async function addProductToCart(
   }
 
   /*
-   * Limit the number of different products
-   * in the cart.
+   * Limit the number of different cart items.
    */
   const currentItemCount =
     await countUserCartItems(userId);
@@ -190,6 +245,7 @@ export async function addProductToCart(
     {
       userId,
       productId,
+      variantId,
       quantity,
     },
     cart.id
@@ -205,11 +261,17 @@ export async function updateCartItem(
     throw new Error("Invalid user ID");
   }
 
-  if (!Number.isInteger(itemId) || itemId <= 0) {
+  if (
+    !Number.isInteger(itemId) ||
+    itemId <= 0
+  ) {
     throw new Error("Invalid cart item ID");
   }
 
-  if (!Number.isInteger(quantity) || quantity <= 0) {
+  if (
+    !Number.isInteger(quantity) ||
+    quantity <= 0
+  ) {
     throw new Error(
       "Quantity must be greater than zero"
     );
@@ -222,7 +284,9 @@ export async function updateCartItem(
     );
 
   if (!item) {
-    throw new Error("Cart item not found");
+    throw new Error(
+      "Cart item not found"
+    );
   }
 
   if (!item.product.isActive) {
@@ -231,7 +295,53 @@ export async function updateCartItem(
     );
   }
 
-  if (quantity > item.product.count) {
+  let availableStock: number;
+
+  /*
+   * If this cart item belongs to a variant,
+   * validate and use that variant's stock.
+   */
+  if (item.variantId !== null) {
+    if (!item.variant) {
+      throw new Error(
+        "Product variant not found"
+      );
+    }
+
+    if (
+      !item.variant.isActive ||
+      item.variant.productId !==
+        item.productId
+    ) {
+      throw new Error(
+        "This product variant is no longer available"
+      );
+    }
+
+    availableStock =
+      item.variant.count;
+
+    if (availableStock <= 0) {
+      throw new Error(
+        "This product variant is out of stock"
+      );
+    }
+  } else {
+    /*
+     * Products without variants use the
+     * product-level stock.
+     */
+    availableStock =
+      item.product.count;
+
+    if (availableStock <= 0) {
+      throw new Error(
+        "This product is out of stock"
+      );
+    }
+  }
+
+  if (quantity > availableStock) {
     throw new Error(
       "Requested quantity exceeds available stock"
     );
@@ -252,7 +362,10 @@ export async function removeProductFromCart(
     throw new Error("Invalid user ID");
   }
 
-  if (!Number.isInteger(itemId) || itemId <= 0) {
+  if (
+    !Number.isInteger(itemId) ||
+    itemId <= 0
+  ) {
     throw new Error("Invalid cart item ID");
   }
 
@@ -263,7 +376,9 @@ export async function removeProductFromCart(
     );
 
   if (!item) {
-    throw new Error("Cart item not found");
+    throw new Error(
+      "Cart item not found"
+    );
   }
 
   return deleteCartItem(itemId);

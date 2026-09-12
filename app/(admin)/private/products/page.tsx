@@ -16,9 +16,16 @@ import {
   Search,
   Trash2,
   X,
+  Palette,
 } from "lucide-react";
 
 import { normalizeImageUrl } from "@/app/lib/common/imageNormalizer";
+
+type ProductVariant = {
+  id?: number;
+  color: string | null;
+  count: number;
+};
 
 type Product = {
   id: number;
@@ -28,7 +35,8 @@ type Product = {
   offer: number | string | null;
   images: string[];
   description: string;
-  count: number;
+  count?: number;
+  variants?: ProductVariant[];
   purchaseCount: number;
   isFeatured: boolean;
   isActive: boolean;
@@ -49,6 +57,11 @@ type Category = {
   id: number;
   name: string;
   slug?: string;
+};
+
+type ProductVariantForm = {
+  color: string | null;
+  count: string;
 };
 
 const LIMIT = 10;
@@ -100,6 +113,66 @@ function formatPrice(value: number | string) {
   return new Intl.NumberFormat("fa-IR").format(
     Math.round(number)
   );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Variant helpers
+|--------------------------------------------------------------------------
+*/
+
+function getProductStock(product: Product) {
+  /*
+  |--------------------------------------------------------------------------
+  | New variant-based stock
+  |--------------------------------------------------------------------------
+  */
+
+  if (Array.isArray(product.variants)) {
+    return product.variants.reduce(
+      (total, variant) =>
+        total + Math.max(0, Number(variant.count) || 0),
+      0
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Backward compatibility
+  |--------------------------------------------------------------------------
+  */
+
+  return Math.max(0, Number(product.count) || 0);
+}
+
+function isValidHexColor(value: string) {
+  return /^#[0-9A-Fa-f]{6}$/.test(
+    value.trim()
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Slug
+|--------------------------------------------------------------------------
+*/
+
+function generateProductSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(
+      /\s+/gu,
+      "-"
+    )
+    .replace(
+      /-+/gu,
+      "-"
+    )
+    .replace(
+      /^[\-]+|[\-]+$/gu,
+      ""
+    );
 }
 
 /*
@@ -300,7 +373,7 @@ export default function AdminProductsPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | Keep pagination refs synchronized
+  | Pagination refs
   |--------------------------------------------------------------------------
   */
 
@@ -318,16 +391,6 @@ export default function AdminProductsPage() {
   |--------------------------------------------------------------------------
   | Load products
   |--------------------------------------------------------------------------
-  |
-  | IMPORTANT:
-  |
-  | Search and status are NOT sent here.
-  |
-  | This endpoint is only responsible for:
-  |
-  | - initial products
-  | - cursor pagination
-  |
   */
 
   const loadProducts = useCallback(
@@ -335,12 +398,6 @@ export default function AdminProductsPage() {
       cursor: string | null = null,
       append = false
     ) => {
-      /*
-      |--------------------------------------------------------------------------
-      | Prevent duplicate pagination requests
-      |--------------------------------------------------------------------------
-      */
-
       if (append) {
         if (loadingMoreRef.current) {
           return;
@@ -389,12 +446,6 @@ export default function AdminProductsPage() {
           "newest"
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Cursor
-        |--------------------------------------------------------------------------
-        */
-
         if (cursor) {
           params.set(
             "cursor",
@@ -430,12 +481,6 @@ export default function AdminProductsPage() {
           );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Authorization
-        |--------------------------------------------------------------------------
-        */
-
         if (
           response.status === 401 ||
           response.status === 403
@@ -444,12 +489,6 @@ export default function AdminProductsPage() {
             "دسترسی به پنل ادمین ندارید."
           );
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Server error
-        |--------------------------------------------------------------------------
-        */
 
         if (!response.ok) {
           throw new Error(
@@ -461,24 +500,10 @@ export default function AdminProductsPage() {
         const incoming =
           data.products ?? [];
 
-        /*
-        |--------------------------------------------------------------------------
-        | Update products
-        |--------------------------------------------------------------------------
-        */
-
         setProducts((current) => {
-          /*
-          | First page
-          */
-
           if (!append) {
             return incoming;
           }
-
-          /*
-          | Remove duplicated products
-          */
 
           const existingIds =
             new Set(
@@ -501,12 +526,6 @@ export default function AdminProductsPage() {
             ...uniqueIncoming,
           ];
         });
-
-        /*
-        |--------------------------------------------------------------------------
-        | Pagination state
-        |--------------------------------------------------------------------------
-        */
 
         const newCursor =
           data.nextCursor ?? null;
@@ -553,14 +572,6 @@ export default function AdminProductsPage() {
   |--------------------------------------------------------------------------
   | Initial load
   |--------------------------------------------------------------------------
-  |
-  | IMPORTANT:
-  |
-  | This runs ONLY once.
-  |
-  | Changing search/status will NOT
-  | reload the normal products endpoint.
-  |
   */
 
   useEffect(() => {
@@ -572,30 +583,13 @@ export default function AdminProductsPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | Search products
+  | Search
   |--------------------------------------------------------------------------
-  |
-  | Search goes directly to:
-  |
-  | /api/admin/products/search
-  |
-  | Therefore it can find products that
-  | have not been loaded by infinite scroll.
-  |
   */
 
   useEffect(() => {
     const query =
       search.trim();
-
-    /*
-    |--------------------------------------------------------------------------
-    | Empty search
-    |--------------------------------------------------------------------------
-    |
-    | Return to normal infinite-scroll list.
-    |
-    */
 
     if (!query) {
       if (
@@ -613,21 +607,9 @@ export default function AdminProductsPage() {
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Debounce
-    |--------------------------------------------------------------------------
-    */
-
     const timeout =
       window.setTimeout(
         async () => {
-          /*
-          |--------------------------------------------------------------------------
-          | Cancel previous request
-          |--------------------------------------------------------------------------
-          */
-
           if (
             searchAbortControllerRef.current
           ) {
@@ -652,14 +634,6 @@ export default function AdminProductsPage() {
               query
             );
 
-            /*
-            | Service supports max 100.
-            |
-            | This gives search a much larger
-            | result set than the normal 10-item
-            | infinite-scroll pages.
-            */
-
             params.set(
               "limit",
               "100"
@@ -669,12 +643,6 @@ export default function AdminProductsPage() {
               "sort",
               "newest"
             );
-
-            /*
-            |--------------------------------------------------------------------------
-            | Search request
-            |--------------------------------------------------------------------------
-            */
 
             const response =
               await fetch(
@@ -706,23 +674,11 @@ export default function AdminProductsPage() {
               );
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Ignore if this request was cancelled
-            |--------------------------------------------------------------------------
-            */
-
             if (
               controller.signal.aborted
             ) {
               return;
             }
-
-            /*
-            |--------------------------------------------------------------------------
-            | Authorization
-            |--------------------------------------------------------------------------
-            */
 
             if (
               response.status ===
@@ -735,12 +691,6 @@ export default function AdminProductsPage() {
               );
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Server error
-            |--------------------------------------------------------------------------
-            */
-
             if (!response.ok) {
               throw new Error(
                 data.error ||
@@ -748,22 +698,10 @@ export default function AdminProductsPage() {
               );
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Set search results
-            |--------------------------------------------------------------------------
-            */
-
             setSearchResults(
               data.products ?? []
             );
           } catch (error) {
-            /*
-            |--------------------------------------------------------------------------
-            | AbortError is expected when user keeps typing
-            |--------------------------------------------------------------------------
-            */
-
             if (
               error instanceof
                 DOMException &&
@@ -810,9 +748,6 @@ export default function AdminProductsPage() {
   |--------------------------------------------------------------------------
   | Infinite Scroll
   |--------------------------------------------------------------------------
-  |
-  | Only works when search is empty.
-  |
   */
 
   useEffect(() => {
@@ -822,12 +757,6 @@ export default function AdminProductsPage() {
     if (!target) {
       return;
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Do not infinite-scroll while searching
-    |--------------------------------------------------------------------------
-    */
 
     if (search.trim()) {
       return;
@@ -851,9 +780,7 @@ export default function AdminProductsPage() {
             return;
           }
 
-          if (
-            loading
-          ) {
+          if (loading) {
             return;
           }
 
@@ -877,15 +804,8 @@ export default function AdminProductsPage() {
         },
         {
           root: null,
-
-          /*
-          | Start loading the next page
-          | before the user reaches the bottom.
-          */
-
           rootMargin:
             "400px 0px",
-
           threshold: 0,
         }
       );
@@ -952,12 +872,6 @@ export default function AdminProductsPage() {
         );
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Update normal products
-      |--------------------------------------------------------------------------
-      */
-
       setProducts(
         (current) =>
           current.map(
@@ -972,12 +886,6 @@ export default function AdminProductsPage() {
                 : item
           )
       );
-
-      /*
-      |--------------------------------------------------------------------------
-      | Update search results too
-      |--------------------------------------------------------------------------
-      */
 
       setSearchResults(
         (current) => {
@@ -1009,32 +917,14 @@ export default function AdminProductsPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | Display products
+  | Display
   |--------------------------------------------------------------------------
-  |
-  | If search is active:
-  |
-  | searchResults
-  |
-  | Otherwise:
-  |
-  | products
-  |
   */
 
   const displayedProducts =
     search.trim()
       ? searchResults ?? []
       : products;
-
-  /*
-  |--------------------------------------------------------------------------
-  | Client-side status filtering
-  |--------------------------------------------------------------------------
-  |
-  | Status does NOT cause a request.
-  |
-  */
 
   const filteredProducts =
     useMemo(() => {
@@ -1188,7 +1078,9 @@ export default function AdminProductsPage() {
               products.filter(
                 (product) =>
                   product.isActive &&
-                  product.count <= 5
+                  getProductStock(
+                    product
+                  ) <= 5
               ).length
             }
           />
@@ -1263,8 +1155,6 @@ export default function AdminProductsPage() {
               </FilterButton>
             </div>
           </div>
-
-          {/* Search status */}
 
           {search.trim() && (
             <div className="mt-3 flex items-center justify-between">
@@ -1386,8 +1276,6 @@ export default function AdminProductsPage() {
               </div>
             )}
 
-          {/* No more products */}
-
           {!search.trim() &&
             !hasNextPage &&
             filteredProducts.length >
@@ -1398,8 +1286,6 @@ export default function AdminProductsPage() {
                 </span>
               </div>
             )}
-
-          {/* Empty */}
 
           {filteredProducts.length ===
             0 &&
@@ -1529,6 +1415,9 @@ function ProductRow({
   const hasDiscount =
     offer > 0;
 
+  const stock =
+    getProductStock(product);
+
   return (
     <tr className="border-b border-neutral-100 last:border-0">
       <td className="px-6 py-4">
@@ -1583,7 +1472,7 @@ function ProductRow({
 
       <td className="px-6 py-4">
         <StockBadge
-          count={product.count}
+          count={stock}
         />
       </td>
 
@@ -1659,6 +1548,9 @@ function ProductMobileCard({
   const hasDiscount =
     offer > 0;
 
+  const stock =
+    getProductStock(product);
+
   return (
     <div className="p-4">
       <div className="flex gap-4">
@@ -1725,9 +1617,7 @@ function ProductMobileCard({
               <p className="mt-1 text-xs font-bold text-black">
                 {new Intl.NumberFormat(
                   "fa-IR"
-                ).format(
-                  product.count
-                )}
+                ).format(stock)}
               </p>
             </div>
 
@@ -1899,14 +1789,31 @@ function CreateProductModal({
   const [slug, setSlug] =
     useState("");
 
+  /*
+  |--------------------------------------------------------------------------
+  | If true, slug is controlled manually.
+  |--------------------------------------------------------------------------
+  */
+
+  const slugManuallyEditedRef =
+    useRef(false);
+
   const [price, setPrice] =
     useState("");
 
   const [offer, setOffer] =
     useState("");
 
-  const [count, setCount] =
-    useState("0");
+  const [hasColors, setHasColors] =
+    useState(false);
+
+  const [variants, setVariants] =
+    useState<ProductVariantForm[]>([
+      {
+        color: null,
+        count: "0",
+      },
+    ]);
 
   const [categoryId, setCategoryId] =
     useState("");
@@ -1943,6 +1850,26 @@ function CreateProductModal({
 
   const [error, setError] =
     useState("");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Auto slug
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    if (
+      slugManuallyEditedRef.current
+    ) {
+      return;
+    }
+
+    setSlug(
+      generateProductSlug(
+        title
+      )
+    );
+  }, [title]);
 
   /*
   |--------------------------------------------------------------------------
@@ -2024,6 +1951,83 @@ function CreateProductModal({
   useEffect(() => {
     loadCategories();
   }, []);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Variant mode
+  |--------------------------------------------------------------------------
+  */
+
+  function handleColorsModeChange(
+    enabled: boolean
+  ) {
+    setHasColors(enabled);
+    setError("");
+
+    if (enabled) {
+      setVariants([
+        {
+          color: "#000000",
+          count: "0",
+        },
+      ]);
+    } else {
+      setVariants([
+        {
+          color: null,
+          count: "0",
+        },
+      ]);
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Variant operations
+  |--------------------------------------------------------------------------
+  */
+
+  function updateVariant(
+    index: number,
+    patch: Partial<ProductVariantForm>
+  ) {
+    setVariants((current) =>
+      current.map(
+        (variant, variantIndex) =>
+          variantIndex === index
+            ? {
+                ...variant,
+                ...patch,
+              }
+            : variant
+      )
+    );
+  }
+
+  function addVariant() {
+    setVariants((current) => [
+      ...current,
+      {
+        color: "#000000",
+        count: "0",
+      },
+    ]);
+  }
+
+  function removeVariant(
+    index: number
+  ) {
+    setVariants((current) => {
+      if (current.length <= 1) {
+        return current;
+      }
+
+      return current.filter(
+        (_, variantIndex) =>
+          variantIndex !== index
+      );
+    });
+  }
 
   /*
   |--------------------------------------------------------------------------
@@ -2246,6 +2250,98 @@ function CreateProductModal({
 
   /*
   |--------------------------------------------------------------------------
+  | Validate variants
+  |--------------------------------------------------------------------------
+  */
+
+  function buildVariants() {
+    if (!variants.length) {
+      throw new Error(
+        "حداقل یک موجودی برای محصول وارد کنید."
+      );
+    }
+
+    const result =
+      variants.map(
+        (variant) => {
+          const count =
+            Number(
+              variant.count
+            );
+
+          if (
+            !Number.isInteger(
+              count
+            ) ||
+            count < 0
+          ) {
+            throw new Error(
+              "موجودی هر رنگ باید یک عدد صحیح صفر یا بیشتر باشد."
+            );
+          }
+
+          if (!hasColors) {
+            return {
+              color: null,
+              count,
+            };
+          }
+
+          const color =
+            (
+              variant.color ??
+              ""
+            ).trim().toUpperCase();
+
+          if (
+            !isValidHexColor(
+              color
+            )
+          ) {
+            throw new Error(
+              "کد HEX یکی از رنگ‌ها معتبر نیست."
+            );
+          }
+
+          return {
+            color,
+            count,
+          };
+        }
+      );
+
+    if (!hasColors) {
+      return [
+        {
+          color: null,
+          count: result[0].count,
+        },
+      ];
+    }
+
+    const colors =
+      result.map(
+        (variant) =>
+          variant.color
+      );
+
+    const uniqueColors =
+      new Set(colors);
+
+    if (
+      uniqueColors.size !==
+      colors.length
+    ) {
+      throw new Error(
+        "یک رنگ را نمی‌توانید بیشتر از یک بار اضافه کنید."
+      );
+    }
+
+    return result;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | Submit product
   |--------------------------------------------------------------------------
   */
@@ -2322,19 +2418,8 @@ function CreateProductModal({
         }
       }
 
-      const numericCount =
-        Number(count);
-
-      if (
-        !Number.isInteger(
-          numericCount
-        ) ||
-        numericCount < 0
-      ) {
-        throw new Error(
-          "موجودی محصول معتبر نیست."
-        );
-      }
+      const productVariants =
+        buildVariants();
 
       if (images.length === 0) {
         throw new Error(
@@ -2366,7 +2451,8 @@ function CreateProductModal({
           description.trim(),
         categoryId:
           Number(categoryId),
-        count: numericCount,
+        variants:
+          productVariants,
         isFeatured,
         isActive: true,
       };
@@ -2505,12 +2591,25 @@ function CreateProductModal({
                   required
                 />
 
-                <Input
-                  label="Slug"
-                  value={slug}
-                  onChange={setSlug}
-                  required
-                />
+                <div>
+                  <Input
+                    label="Slug"
+                    value={slug}
+                    onChange={(value) => {
+                      slugManuallyEditedRef.current =
+                        true;
+
+                      setSlug(
+                        value
+                      );
+                    }}
+                    required
+                  />
+
+                  <p className="mt-2 text-[10px] text-neutral-400">
+                    با نوشتن نام محصول به‌صورت خودکار ساخته می‌شود؛ برای تغییر دستی، مستقیماً این فیلد را ویرایش کنید.
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -2585,7 +2684,7 @@ function CreateProductModal({
             <div>
               <div className="mb-3">
                 <p className="text-sm font-bold text-black">
-                  قیمت و موجودی
+                  قیمت و تخفیف
                 </p>
 
                 <p className="mt-1 text-xs text-neutral-400">
@@ -2593,7 +2692,7 @@ function CreateProductModal({
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-xs font-semibold text-neutral-600">
                     قیمت اصلی
@@ -2657,14 +2756,309 @@ function CreateProductModal({
                     offer={offer}
                   />
                 </div>
+              </div>
+            </div>
 
-                <Input
-                  label="موجودی"
-                  type="number"
-                  value={count}
-                  onChange={setCount}
-                  min={0}
+            {/* Variants */}
+
+            <div>
+              <div className="mb-3 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-bold text-black">
+                    رنگ و موجودی
+                  </p>
+
+                  <p className="mt-1 text-xs leading-5 text-neutral-400">
+                    برای هر رنگ می‌توانید موجودی جداگانه تعیین کنید.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-neutral-500">
+                    رنگ‌بندی دارد
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleColorsModeChange(
+                        !hasColors
+                      )
+                    }
+                    disabled={
+                      loading
+                    }
+                    aria-pressed={
+                      hasColors
+                    }
+                    className={`relative h-6 w-11 rounded-full transition ${
+                      hasColors
+                        ? "bg-black"
+                        : "bg-neutral-200"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${
+                        hasColors
+                          ? "right-1"
+                          : "right-6"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {variants.map(
+                  (
+                    variant,
+                    index
+                  ) => (
+                    <div
+                      key={index}
+                      className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4"
+                    >
+                      <div className="flex items-start gap-3">
+                        {hasColors ? (
+                          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-end">
+                            {/* Color picker */}
+
+                            <div className="shrink-0">
+                              <label className="mb-2 block text-[10px] font-semibold text-neutral-500">
+                                رنگ
+                              </label>
+
+                              <div className="relative h-11 w-16 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+                                <input
+                                  type="color"
+                                  value={
+                                    isValidHexColor(
+                                      variant.color ??
+                                        ""
+                                    )
+                                      ? variant.color!
+                                      : "#000000"
+                                  }
+                                  onChange={(
+                                    event
+                                  ) =>
+                                    updateVariant(
+                                      index,
+                                      {
+                                        color:
+                                          event
+                                            .target
+                                            .value
+                                            .toUpperCase(),
+                                      }
+                                    )
+                                  }
+                                  disabled={
+                                    loading
+                                  }
+                                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                />
+
+                                <span
+                                  className="pointer-events-none absolute inset-2 rounded-lg border border-black/10"
+                                  style={{
+                                    backgroundColor:
+                                      isValidHexColor(
+                                        variant.color ??
+                                          ""
+                                      )
+                                        ? variant.color!
+                                        : "#000000",
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* HEX */}
+
+                            <div className="min-w-0 flex-1">
+                              <label className="mb-2 block text-[10px] font-semibold text-neutral-500">
+                                کد HEX
+                              </label>
+
+                              <input
+                                type="text"
+                                value={
+                                  variant.color ??
+                                  ""
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  updateVariant(
+                                    index,
+                                    {
+                                      color:
+                                        event
+                                          .target
+                                          .value
+                                          .toUpperCase(),
+                                    }
+                                  )
+                                }
+                                placeholder="#000000"
+                                maxLength={
+                                  7
+                                }
+                                disabled={
+                                  loading
+                                }
+                                className="h-11 w-full rounded-xl bg-white px-4 text-sm font-mono uppercase outline-none transition focus:bg-neutral-100"
+                              />
+                            </div>
+
+                            {/* Stock */}
+
+                            <div className="sm:w-36">
+                              <label className="mb-2 block text-[10px] font-semibold text-neutral-500">
+                                موجودی
+                              </label>
+
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={
+                                  variant.count
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  updateVariant(
+                                    index,
+                                    {
+                                      count:
+                                        event
+                                          .target
+                                          .value,
+                                    }
+                                  )
+                                }
+                                disabled={
+                                  loading
+                                }
+                                className="h-11 w-full rounded-xl bg-white px-4 text-sm outline-none transition focus:bg-neutral-100"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-1 items-end gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white">
+                              <Package
+                                size={
+                                  18
+                                }
+                                className="text-neutral-400"
+                              />
+                            </div>
+
+                            <div className="flex-1">
+                              <p className="text-xs font-bold text-neutral-700">
+                                محصول بدون رنگ
+                              </p>
+
+                              <p className="mt-1 text-[10px] text-neutral-400">
+                                موجودی کل محصول
+                              </p>
+                            </div>
+
+                            <div className="w-36">
+                              <label className="mb-2 block text-[10px] font-semibold text-neutral-500">
+                                موجودی
+                              </label>
+
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={
+                                  variant.count
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  updateVariant(
+                                    index,
+                                    {
+                                      count:
+                                        event
+                                          .target
+                                          .value,
+                                    }
+                                  )
+                                }
+                                disabled={
+                                  loading
+                                }
+                                className="h-11 w-full rounded-xl bg-white px-4 text-sm outline-none transition focus:bg-neutral-100"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {hasColors &&
+                          variants.length >
+                            1 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeVariant(
+                                  index
+                                )
+                              }
+                              disabled={
+                                loading
+                              }
+                              className="mt-7 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-neutral-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                              title="حذف رنگ"
+                            >
+                              <Trash2
+                                size={
+                                  16
+                                }
+                              />
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+
+              {hasColors && (
+                <button
+                  type="button"
+                  onClick={
+                    addVariant
+                  }
+                  disabled={
+                    loading
+                  }
+                  className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 text-xs font-semibold text-neutral-500 transition hover:border-neutral-500 hover:bg-neutral-100 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus
+                    size={15}
+                  />
+                  افزودن رنگ دیگر
+                </button>
+              )}
+
+              <div className="mt-3 flex items-center gap-2 rounded-xl bg-neutral-50 px-4 py-3">
+                <Palette
+                  size={14}
+                  className="shrink-0 text-neutral-400"
                 />
+
+                <p className="text-[10px] leading-5 text-neutral-400">
+                  {hasColors
+                    ? "هر رنگ موجودی مستقل دارد و موجودی نمایش‌داده‌شده در لیست برابر مجموع موجودی رنگ‌هاست."
+                    : "این محصول بدون رنگ‌بندی ثبت می‌شود و موجودی آن به صورت مستقیم ذخیره خواهد شد."}
+                </p>
               </div>
             </div>
 
@@ -2921,12 +3315,16 @@ function CreateCategoryModal({
       .trim()
       .toLowerCase()
       .replace(
-        /\s+/g,
+        /\s+/gu,
         "-"
       )
       .replace(
-        /-+/g,
+        /-+/gu,
         "-"
+      )
+      .replace(
+        /^[\-]+|[\-]+$/gu,
+        ""
       );
   }
 
