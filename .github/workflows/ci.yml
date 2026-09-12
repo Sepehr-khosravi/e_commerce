@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_ENV: production
+
+      # CI-only dummy values
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      REDIS_URL: redis://fake:6379
+
+      JWT_SECRET: ci-dummy-jwt-secret
+      OTP_SECRET: ci-dummy-otp-secret
+
+      ZARINPAL_BASE_URL: https://sandbox.zarinpal.com
+      ZARINPAL_MERCHANT_ID: ci-dummy-merchant-id
+      ZARINPAL_AMOUNT_MULTIPLIER: 10
+
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      TOROB_TOKEN_VERSION: 1
+      TOROB_PUBLIC_KEY: ci-dummy-torob-key
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
