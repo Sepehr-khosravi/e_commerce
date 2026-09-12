@@ -1,0 +1,120 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+
+  # =========================================================
+  # CI
+  # =========================================================
+
+  ci:
+    name: CI
+
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_ENV: production
+
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      REDIS_URL: redis://fake:6379
+
+      JWT_SECRET: ci-dummy-jwt-secret
+      OTP_SECRET: ci-dummy-otp-secret
+
+      ZARINPAL_BASE_URL: https://sandbox.zarinpal.com
+      ZARINPAL_MERCHANT_ID: ci-dummy-merchant-id
+      ZARINPAL_AMOUNT_MULTIPLIER: 10
+
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      TOROB_TOKEN_VERSION: 1
+      TOROB_PUBLIC_KEY: ci-dummy-torob-key
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+
+  # =========================================================
+  # CD
+  # =========================================================
+
+  deploy:
+    name: Deploy to VPS
+
+    needs: ci
+
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.2
+
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+
+          script: |
+
+            set -e
+
+            echo "================================"
+            echo "Starting deployment"
+            echo "================================"
+
+            cd /var/www/myapp/e_commerce
+
+            echo "Pulling latest code..."
+
+            git pull --ff-only origin main
+
+            echo "Building Docker images..."
+
+            docker compose build
+
+            echo "Starting PostgreSQL and Redis..."
+
+            docker compose up -d postgres redis
+
+            echo "Running database migrations..."
+
+            docker compose run --rm migrate
+
+            echo "Starting application..."
+
+            docker compose up -d app
+
+            echo "================================"
+            echo "Deployment completed successfully"
+            echo "================================"
