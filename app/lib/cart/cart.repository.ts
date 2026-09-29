@@ -131,7 +131,17 @@ export async function findCartItem(
 
     include: {
       product: true,
-      variant: true,
+
+      variant: {
+        select: {
+          id: true,
+          productId: true,
+          color: true,
+          count: true,
+          isActive: true,
+        },
+      },
+
       cart: true,
     },
   });
@@ -155,7 +165,17 @@ export async function findCartItemByProduct(
 
     include: {
       product: true,
-      variant: true,
+
+      variant: {
+        select: {
+          id: true,
+          productId: true,
+          color: true,
+          count: true,
+          isActive: true,
+        },
+      },
+
       cart: true,
     },
   });
