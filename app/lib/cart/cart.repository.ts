@@ -5,6 +5,18 @@ import type {
   UpdateCartItemData,
 } from "./cart.types";
 
+const cartItemVariantSelect = {
+  id: true,
+  productId: true,
+  color: true,
+  count: true,
+  isActive: true,
+} as const;
+
+const cartItemProductInclude = {
+  category: true,
+} as const;
+
 export async function findUserCart(
   userId: number,
   options?: {
@@ -36,7 +48,7 @@ export async function findUserCart(
 
         take: limit + 1,
 
-        ...(cursor
+        ...(cursor !== undefined
           ? {
               skip: 1,
               cursor: {
@@ -47,12 +59,12 @@ export async function findUserCart(
 
         include: {
           product: {
-            include: {
-              category: true,
-            },
+            include: cartItemProductInclude,
           },
 
-          variant: true,
+          variant: {
+            select: cartItemVariantSelect,
+          },
         },
       },
     },
@@ -104,12 +116,12 @@ export async function createUserCart(
       items: {
         include: {
           product: {
-            include: {
-              category: true,
-            },
+            include: cartItemProductInclude,
           },
 
-          variant: true,
+          variant: {
+            select: cartItemVariantSelect,
+          },
         },
       },
     },
@@ -133,13 +145,7 @@ export async function findCartItem(
       product: true,
 
       variant: {
-        select: {
-          id: true,
-          productId: true,
-          color: true,
-          count: true,
-          isActive: true,
-        },
+        select: cartItemVariantSelect,
       },
 
       cart: true,
@@ -167,13 +173,7 @@ export async function findCartItemByProduct(
       product: true,
 
       variant: {
-        select: {
-          id: true,
-          productId: true,
-          color: true,
-          count: true,
-          isActive: true,
-        },
+        select: cartItemVariantSelect,
       },
 
       cart: true,
@@ -195,7 +195,10 @@ export async function createCartItem(
 
     include: {
       product: true,
-      variant: true,
+
+      variant: {
+        select: cartItemVariantSelect,
+      },
     },
   });
 }
@@ -214,7 +217,10 @@ export async function updateCartItemQuantity(
 
     include: {
       product: true,
-      variant: true,
+
+      variant: {
+        select: cartItemVariantSelect,
+      },
     },
   });
 }
